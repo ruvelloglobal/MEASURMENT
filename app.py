@@ -12,10 +12,10 @@ import io
 from datetime import datetime
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Ruvello Smart Measurement", page_icon="💎", layout="wide")
+st.set_page_config(page_title="Ruvello Measurement", page_icon="💎", layout="wide")
 
-st.title("💎 Ruvello Global: Precision Measurement App")
-st.markdown("Generate **Ultra-Luxury** Packing Lists with **Dual-Column Smart Entry**.")
+st.title("💎 Ruvello Global: Precision Measurement Sheet")
+st.markdown("Generate **Ultra-Luxury, High-Contrast** Inspection Reports.")
 
 # --- SIDEBAR: SETTINGS ---
 with st.sidebar:
@@ -38,7 +38,6 @@ with st.sidebar:
     allowance_str = st.text_input("Allowance (H x L)", value="-5 x 4")
 
 # --- LOGIC: PARSE ALLOWANCE ---
-# Rule: "-5 x 4" -> Deduct 5 from HEIGHT, Deduct 4 from LENGTH
 def parse_allowance(allow_str):
     nums = re.findall(r'\d+', allow_str)
     if len(nums) >= 2:
@@ -51,89 +50,56 @@ def parse_allowance(allow_str):
 deduct_h, deduct_l = parse_allowance(allowance_str)
 
 # --- SECTION: DUAL COLUMN ENTRY ---
-st.subheader("5. Smart Data Entry (2 Columns)")
-st.markdown("Copy the **Gross Length** column and **Gross Height** column separately from Excel.")
+st.subheader("5. Smart Data Entry")
+st.markdown("Copy **Gross Length** and **Gross Height** columns from Excel.")
 
 paste_col1, paste_col2 = st.columns(2)
-
 with paste_col1:
-    st.markdown("**Paste GROSS LENGTHS Here:**")
-    raw_L = st.text_area("Column L", height=300, placeholder="280\n290\n300")
-
+    raw_L = st.text_area("Paste GROSS LENGTHS Here", height=300, placeholder="280\n290")
 with paste_col2:
-    st.markdown("**Paste GROSS HEIGHTS Here:**")
-    raw_H = st.text_area("Column H", height=300, placeholder="180\n190\n200")
+    raw_H = st.text_area("Paste GROSS HEIGHTS Here", height=300, placeholder="180\n190")
 
 # --- PROCESSING ENGINE ---
 if st.button("⚡ Process & Calculate", type="primary"):
     if raw_L and raw_H:
         try:
-            # 1. Split and Clean Data
             list_L = [float(x.strip()) for x in raw_L.split('\n') if x.strip()]
             list_H = [float(x.strip()) for x in raw_H.split('\n') if x.strip()]
             
-            # 2. Validation
             if len(list_L) != len(list_H):
-                st.error(f"⚠️ Mismatch! Found {len(list_L)} Lengths but {len(list_H)} Heights. Please check your data.")
+                st.error(f"⚠️ Mismatch! Found {len(list_L)} Lengths but {len(list_H)} Heights.")
             else:
-                # 3. Create DataFrame
-                df_new = pd.DataFrame({
-                    "GL": list_L,
-                    "GH": list_H
-                })
-                
-                # 4. Auto-Numbering
+                df_new = pd.DataFrame({"GL": list_L, "GH": list_H})
                 df_new["Slab No"] = [f"RG-{i+1}" for i in range(len(df_new))]
                 
-                # 5. Smart Deduction (Net = Gross - Deduction)
+                # Deductions
                 df_new["NL"] = df_new["GL"] - deduct_l
                 df_new["NH"] = df_new["GH"] - deduct_h
                 
-                # 6. Area Calculation
+                # Areas
                 df_new["Gross Area"] = (df_new["GL"] * df_new["GH"]) / 10000
                 df_new["Net Area"] = (df_new["NL"] * df_new["NH"]) / 10000
                 
-                # Save to Session
                 st.session_state.smart_data = df_new
-                st.success(f"✅ Successfully processed {len(df_new)} slabs!")
-                
+                st.success(f"✅ Processed {len(df_new)} slabs!")
         except ValueError:
-            st.error("Error: Please ensure you pasted only Numbers (no text headers).")
-    else:
-        st.warning("Please paste data into both columns.")
+            st.error("Error: Please ensure you pasted only Numbers.")
 
 # --- DISPLAY DATA TABLE ---
 if "smart_data" in st.session_state:
     final_df = st.session_state.smart_data
-    
-    # Totals
     total_gross = final_df["Gross Area"].sum()
     total_net = final_df["Net Area"].sum()
     total_count = len(final_df)
     
-    # Metrics
     st.markdown("---")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Total Slabs", total_count)
     m2.metric("Gross Area", f"{total_gross:.3f} m2")
     m3.metric("Net Area", f"{total_net:.3f} m2")
-    m4.metric("Applied Deduction", f"H -{deduct_h} | L -{deduct_l}")
+    m4.metric("Deduction", f"H -{deduct_h} | L -{deduct_l}")
 
-    # Preview
-    st.markdown("### **Final Data Preview**")
-    st.dataframe(
-        final_df,
-        column_order=["Slab No", "GL", "GH", "NL", "NH", "Gross Area", "Net Area"],
-        column_config={
-            "GL": st.column_config.NumberColumn("Gross L", format="%d"),
-            "GH": st.column_config.NumberColumn("Gross H", format="%d"),
-            "NL": st.column_config.NumberColumn("Net L", format="%d"),
-            "NH": st.column_config.NumberColumn("Net H", format="%d"),
-            "Gross Area": st.column_config.NumberColumn(format="%.3f"),
-            "Net Area": st.column_config.NumberColumn(format="%.3f")
-        },
-        use_container_width=True
-    )
+    st.dataframe(final_df, use_container_width=True)
 else:
     total_count = 0
     total_gross = 0
@@ -147,28 +113,33 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20, bottomMargin=20, leftMargin=20, rightMargin=20)
     elements = []
     
-    # --- PALETTE ---
-    GOLD = HexColor('#C5A059')   
-    BLACK = HexColor('#101010') 
-    GREY = HexColor('#404040')
-    HEADER_BG = HexColor('#000000') 
-    SUB_HEADER_BG = HexColor('#252525')
-    ZEBRA_EVEN = HexColor('#FFFFFF')
-    ZEBRA_ODD = HexColor('#FAFAFA')
+    # --- PALETTE (High Contrast) ---
+    GOLD = HexColor('#D4AF37')
+    BLACK = HexColor('#000000') 
+    DARK_GREY = HexColor('#222222')
+    HEADER_TEXT_COLOR = HexColor('#FFFFFF') # White text for subheaders
+    
+    # Table Backgrounds
+    BG_MAIN_HEADER = BLACK
+    BG_SUB_HEADER = DARK_GREY
+    BG_ODD = HexColor('#FFFFFF')
+    BG_EVEN = HexColor('#FAFAFA')
 
     # --- STYLES ---
     styles = getSampleStyleSheet()
-    style_co = ParagraphStyle('Co', fontName='Times-Bold', fontSize=22, textColor=BLACK, alignment=1)
-    style_sub = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=9, textColor=GOLD, alignment=1, letterSpacing=3)
+    style_co = ParagraphStyle('Co', fontName='Times-Bold', fontSize=24, textColor=BLACK, alignment=1)
+    style_addr = ParagraphStyle('Ad', fontName='Helvetica', fontSize=8, textColor=DARK_GREY, alignment=1, leading=10)
+    style_sub = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=10, textColor=GOLD, alignment=1, letterSpacing=2, spaceBefore=10)
     
-    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=GREY, textTransform='uppercase')
+    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=DARK_GREY, textTransform='uppercase')
     
-    style_th_gold = ParagraphStyle('THg', fontName='Times-Bold', fontSize=10, textColor=GOLD, alignment=1)
-    style_th_wht = ParagraphStyle('THw', fontName='Helvetica', fontSize=8, textColor=colors.whitesmoke, alignment=1)
+    # Table Text Styles
+    style_th_main = ParagraphStyle('THm', fontName='Times-Bold', fontSize=11, textColor=GOLD, alignment=1) # Gold text on Black
+    style_th_sub = ParagraphStyle('THs', fontName='Helvetica-Bold', fontSize=8, textColor=HEADER_TEXT_COLOR, alignment=1) # White text on Grey
     
     style_td_id = ParagraphStyle('TDid', fontName='Helvetica', fontSize=9, textColor=BLACK, alignment=1)
     style_td_bold = ParagraphStyle('TDbold', fontName='Times-Bold', fontSize=10, textColor=BLACK, alignment=1)
-    style_td_norm = ParagraphStyle('TDnorm', fontName='Times-Roman', fontSize=10, textColor=GREY, alignment=1)
+    style_td_norm = ParagraphStyle('TDnorm', fontName='Times-Roman', fontSize=10, textColor=DARK_GREY, alignment=1)
 
     # 1. HEADER
     if logo:
@@ -178,56 +149,67 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     
     elements.append(Spacer(1, 10))
     elements.append(Paragraph("RUVELLO GLOBAL LLP", style_co))
+    
+    # Company Details
+    address_text = "1305, Uniyaro Ka Rasta, Chandpol Bazar, Jaipur, Rajasthan, INDIA - 302001<br/>Email: Rahul@ruvello.com | +91 9636648894"
+    elements.append(Paragraph(address_text, style_addr))
+    
     elements.append(Paragraph(f"INSPECTION REPORT: {material.upper()}", style_sub))
     
-    d = Drawing(500, 8)
-    d.add(Line(0, 4, 550, 4, strokeColor=GOLD, strokeWidth=0.5))
-    d.add(Line(0, 1, 550, 1, strokeColor=GOLD, strokeWidth=1.5))
+    d = Drawing(500, 10)
+    d.add(Line(0, 5, 550, 5, strokeColor=GOLD, strokeWidth=1))
     elements.append(d)
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 20))
 
-    # 2. INFO GRID
+    # 2. INFO GRID (Spacious Layout)
+    # Row 1: Invoice | Date | Total Slabs | Mine
+    # Row 2: Thickness | Container | Allowance | (Empty)
+    
+    # We use separate cells for Container and Allowance now
     info_data = [
         [
-            Paragraph(f"INVOICE NO:<br/><font size=10 color=black><b>{inv}</b></font>", style_lbl),
-            Paragraph(f"DATE:<br/><font size=10 color=black><b>{dt.strftime('%d-%b-%Y')}</b></font>", style_lbl),
-            Paragraph(f"TOTAL SLABS:<br/><font size=10 color=black><b>{t_slabs}</b></font>", style_lbl)
+            Paragraph(f"REF NO:<br/><font size=10><b>{inv}</b></font>", style_lbl),
+            Paragraph(f"DATE:<br/><font size=10><b>{dt.strftime('%d-%b-%Y')}</b></font>", style_lbl),
+            Paragraph(f"TOTAL SLABS:<br/><font size=10><b>{t_slabs}</b></font>", style_lbl),
+            Paragraph(f"MINE / BLOCK:<br/><font size=10><b>{mine}</b></font>", style_lbl)
         ],
         [
-            Paragraph(f"THICKNESS:<br/><font size=10 color=black><b>{thk}</b></font>", style_lbl),
-            Paragraph(f"MINE / BLOCK:<br/><font size=10 color=black><b>{mine}</b></font>", style_lbl),
-            Paragraph(f"CONTAINER / ALLOW:<br/><font size=10 color=black><b>{cont} ({allow})</b></font>", style_lbl)
+            Paragraph(f"THICKNESS:<br/><font size=10><b>{thk}</b></font>", style_lbl),
+            Paragraph(f"CONTAINER NO:<br/><font size=10><b>{cont}</b></font>", style_lbl),
+            Paragraph(f"ALLOWANCE:<br/><font size=10><b>{allow}</b></font>", style_lbl),
+            "" # Empty filler
         ]
     ]
-    t_info = Table(info_data, colWidths=[180, 180, 180])
+    
+    t_info = Table(info_data, colWidths=[135, 135, 135, 135])
     t_info.setStyle(TableStyle([
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('PADDING', (0,0), (-1,-1), 8),
-        ('BACKGROUND', (0,0), (-1,-1), HexColor('#FDFDFD')),
+        ('PADDING', (0,0), (-1,-1), 10), # More padding inside info boxes
+        ('BACKGROUND', (0,0), (-1,-1), HexColor('#FAFAFA')),
     ]))
     elements.append(t_info)
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 25))
 
     # 3. MAIN TABLE
     col_widths = [35, 75, 50, 50, 65, 50, 50, 65]
     
-    # Header Rows
+    # Headers
     headers = [
         [
-            Paragraph("S.NO", style_th_gold),
-            Paragraph("SLAB NO", style_th_gold),
-            Paragraph("GROSS MEASUREMENT", style_th_gold), "", "",
-            Paragraph("NET MEASUREMENT", style_th_gold), "", ""
+            Paragraph("S.NO", style_th_main),
+            Paragraph("SLAB NO", style_th_main),
+            Paragraph("GROSS MEASUREMENT", style_th_main), "", "",
+            Paragraph("NET MEASUREMENT", style_th_main), "", ""
         ],
         [
             "", "",
-            Paragraph("L (cm)", style_th_wht), Paragraph("H (cm)", style_th_wht), Paragraph("AREA (m2)", style_th_wht),
-            Paragraph("L (cm)", style_th_wht), Paragraph("H (cm)", style_th_wht), Paragraph("AREA (m2)", style_th_wht)
+            Paragraph("L (cm)", style_th_sub), Paragraph("H (cm)", style_th_sub), Paragraph("AREA (m2)", style_th_sub),
+            Paragraph("L (cm)", style_th_sub), Paragraph("H (cm)", style_th_sub), Paragraph("AREA (m2)", style_th_sub)
         ]
     ]
 
-    # Data Rows
+    # Rows
     rows = []
     for i, row in data.iterrows():
         r = [
@@ -244,9 +226,9 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
 
     # Total Row
     total_row = [
-        "", Paragraph("TOTAL", style_th_gold),
-        "", "", Paragraph(f"<b>{t_gross:.3f}</b>", style_th_gold),
-        "", "", Paragraph(f"<b>{t_net:.3f}</b>", style_th_gold),
+        "", Paragraph("TOTAL", style_th_main),
+        "", "", Paragraph(f"<b>{t_gross:.3f}</b>", style_th_main),
+        "", "", Paragraph(f"<b>{t_net:.3f}</b>", style_th_main),
     ]
     rows.append(total_row)
 
@@ -255,23 +237,29 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     t = Table(table_data, colWidths=col_widths, repeatRows=2)
     
     t.setStyle(TableStyle([
-        # Headers
-        ('BACKGROUND', (0,0), (-1,0), HEADER_BG),
-        ('BACKGROUND', (0,1), (-1,1), SUB_HEADER_BG),
+        # Main Header (Black BG, Gold Text)
+        ('BACKGROUND', (0,0), (-1,0), BG_MAIN_HEADER),
         ('SPAN', (2,0), (4,0)), # Span Gross
         ('SPAN', (5,0), (7,0)), # Span Net
         ('SPAN', (0,0), (0,1)), # Span S.No
         ('SPAN', (1,0), (1,1)), # Span Slab
+        
+        # Sub Header (Dark Grey BG, White Text)
+        ('BACKGROUND', (0,1), (-1,1), BG_SUB_HEADER),
+        
+        # Grid & Alignment
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('BOTTOMPADDING', (0,0), (-1,1), 8),
-        ('TOPPADDING', (0,0), (-1,1), 8),
+        
+        # Padding for Luxury Feel
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
         
         # Zebra Rows
-        ('ROWBACKGROUNDS', (2,0), (-2,-1), [ZEBRA_EVEN, ZEBRA_ODD]),
+        ('ROWBACKGROUNDS', (2,0), (-2,-1), [BG_ODD, BG_EVEN]),
         
-        # Total Row
+        # Total Row (Black BG, Gold Text)
         ('BACKGROUND', (0,-1), (-1,-1), BLACK),
         ('TEXTCOLOR', (0,-1), (-1,-1), GOLD),
         ('LINEABOVE', (0,-1), (-1,-1), 2, GOLD),
