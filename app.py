@@ -9,19 +9,30 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
 from reportlab.graphics.shapes import Drawing, Line
 import io
+import os
 from datetime import datetime
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Ruvello Measurement", page_icon="💎", layout="wide")
 
-st.title("💎 Ruvello Global: Precision Measurement Sheet")
-st.markdown("Generate **Ultra-Luxury, High-Contrast** Inspection Reports.")
+st.title("💎 Ruvello Global: Ultimate Measurement Sheet")
+st.markdown("Generate **Client-Ready, High-Contrast** Inspection Reports.")
 
 # --- SIDEBAR: SETTINGS ---
 with st.sidebar:
     st.header("1. Assets & Meta")
-    uploaded_logo = st.file_uploader("Upload Company Logo", type=["png", "jpg", "jpeg"])
     
+    # LOGIC: Check if logo.png exists in GitHub/Folder, otherwise ask for upload
+    default_logo = None
+    if os.path.exists("logo.png"):
+        default_logo = "logo.png"
+        st.success("✅ Auto-loaded 'logo.png' from system!")
+    
+    uploaded_logo = st.file_uploader("Override Logo (Optional)", type=["png", "jpg", "jpeg"])
+    
+    # Use uploaded if available, else default
+    final_logo_path = uploaded_logo if uploaded_logo else default_logo
+
     st.header("2. Report Details")
     material_name = st.text_input("Material Name", value="ABSOLUTE BLACK")
     invoice_no = st.text_input("Invoice / Ref No", value="EXP/2026/001")
@@ -110,86 +121,103 @@ else:
 # --- LUXURY PDF ENGINE ---
 def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_slabs, t_gross, t_net):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20, bottomMargin=20, leftMargin=20, rightMargin=20)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=30, bottomMargin=30, leftMargin=30, rightMargin=30)
     elements = []
     
-    # --- PALETTE (High Contrast) ---
-    GOLD = HexColor('#D4AF37')
+    # --- PALETTE (True Luxury High Contrast) ---
+    GOLD = HexColor('#C5A059')
     BLACK = HexColor('#000000') 
-    DARK_GREY = HexColor('#222222')
-    HEADER_TEXT_COLOR = HexColor('#FFFFFF') # White text for subheaders
+    DARK_GREY = HexColor('#303030')
+    WHITE = HexColor('#FFFFFF')
     
-    # Table Backgrounds
-    BG_MAIN_HEADER = BLACK
-    BG_SUB_HEADER = DARK_GREY
     BG_ODD = HexColor('#FFFFFF')
-    BG_EVEN = HexColor('#FAFAFA')
+    BG_EVEN = HexColor('#F4F4F4') # Slightly darker grey for better zebra stripe visibility
 
     # --- STYLES ---
     styles = getSampleStyleSheet()
-    style_co = ParagraphStyle('Co', fontName='Times-Bold', fontSize=24, textColor=BLACK, alignment=1)
-    style_addr = ParagraphStyle('Ad', fontName='Helvetica', fontSize=8, textColor=DARK_GREY, alignment=1, leading=10)
-    style_sub = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=10, textColor=GOLD, alignment=1, letterSpacing=2, spaceBefore=10)
     
-    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=DARK_GREY, textTransform='uppercase')
+    # Header Styles
+    style_co = ParagraphStyle('Co', fontName='Times-Bold', fontSize=24, textColor=BLACK, alignment=1, spaceAfter=8)
     
-    # Table Text Styles
-    style_th_main = ParagraphStyle('THm', fontName='Times-Bold', fontSize=11, textColor=GOLD, alignment=1) # Gold text on Black
-    style_th_sub = ParagraphStyle('THs', fontName='Helvetica-Bold', fontSize=8, textColor=HEADER_TEXT_COLOR, alignment=1) # White text on Grey
+    # Address Style - Adjusted leading to prevent overlap
+    style_addr = ParagraphStyle('Ad', fontName='Helvetica', fontSize=9, textColor=DARK_GREY, alignment=1, leading=14)
+    
+    style_sub = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=10, textColor=GOLD, alignment=1, letterSpacing=2)
+    
+    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=8, textColor=DARK_GREY, textTransform='uppercase')
+    
+    # Table Styles
+    # Main Header: Black BG with Gold Text
+    style_th_main = ParagraphStyle('THm', fontName='Times-Bold', fontSize=10, textColor=GOLD, alignment=1) 
+    
+    # Sub Header: Dark Grey BG with White Text (High Visibility)
+    style_th_sub = ParagraphStyle('THs', fontName='Helvetica-Bold', fontSize=8, textColor=WHITE, alignment=1)
     
     style_td_id = ParagraphStyle('TDid', fontName='Helvetica', fontSize=9, textColor=BLACK, alignment=1)
     style_td_bold = ParagraphStyle('TDbold', fontName='Times-Bold', fontSize=10, textColor=BLACK, alignment=1)
     style_td_norm = ParagraphStyle('TDnorm', fontName='Times-Roman', fontSize=10, textColor=DARK_GREY, alignment=1)
 
-    # 1. HEADER
+    # 1. HEADER SECTION (Stacked to prevent overlap)
+    # We use a 1-Column Table for the Header to force vertical stacking
+    header_content = []
+    
     if logo:
-        img = RLImage(logo, width=2.0*inch, height=1.5*inch, kind='proportional')
-        img.hAlign = 'CENTER'
-        elements.append(img)
+        # Check if it's a file path (string) or a BytesIO object (uploaded)
+        if isinstance(logo, str):
+            img = RLImage(logo, width=2.0*inch, height=1.5*inch, kind='proportional')
+        else:
+            logo.seek(0)
+            img = RLImage(logo, width=2.0*inch, height=1.5*inch, kind='proportional')
+        header_content.append(img)
     
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph("RUVELLO GLOBAL LLP", style_co))
+    header_content.append(Spacer(1, 15))
+    header_content.append(Paragraph("RUVELLO GLOBAL LLP", style_co))
     
-    # Company Details
-    address_text = "1305, Uniyaro Ka Rasta, Chandpol Bazar, Jaipur, Rajasthan, INDIA - 302001<br/>Email: Rahul@ruvello.com | +91 9636648894"
-    elements.append(Paragraph(address_text, style_addr))
+    # Address Block
+    addr_lines = "1305, Uniyaro Ka Rasta, Chandpol Bazar, Jaipur, Rajasthan, INDIA - 302001<br/>Email: Rahul@ruvello.com | +91 9636648894"
+    header_content.append(Paragraph(addr_lines, style_addr))
+    header_content.append(Spacer(1, 10))
+    header_content.append(Paragraph(f"INSPECTION REPORT: {material.upper()}", style_sub))
     
-    elements.append(Paragraph(f"INSPECTION REPORT: {material.upper()}", style_sub))
+    # Wrap Header in Table
+    t_header = Table([[item] for item in header_content], colWidths=[500])
+    t_header.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    elements.append(t_header)
     
+    # Divider Line
     d = Drawing(500, 10)
-    d.add(Line(0, 5, 550, 5, strokeColor=GOLD, strokeWidth=1))
+    d.add(Line(0, 5, 535, 5, strokeColor=GOLD, strokeWidth=1))
     elements.append(d)
     elements.append(Spacer(1, 20))
 
-    # 2. INFO GRID (Spacious Layout)
-    # Row 1: Invoice | Date | Total Slabs | Mine
-    # Row 2: Thickness | Container | Allowance | (Empty)
-    
-    # We use separate cells for Container and Allowance now
-    info_data = [
-        [
-            Paragraph(f"REF NO:<br/><font size=10><b>{inv}</b></font>", style_lbl),
-            Paragraph(f"DATE:<br/><font size=10><b>{dt.strftime('%d-%b-%Y')}</b></font>", style_lbl),
-            Paragraph(f"TOTAL SLABS:<br/><font size=10><b>{t_slabs}</b></font>", style_lbl),
-            Paragraph(f"MINE / BLOCK:<br/><font size=10><b>{mine}</b></font>", style_lbl)
-        ],
-        [
-            Paragraph(f"THICKNESS:<br/><font size=10><b>{thk}</b></font>", style_lbl),
-            Paragraph(f"CONTAINER NO:<br/><font size=10><b>{cont}</b></font>", style_lbl),
-            Paragraph(f"ALLOWANCE:<br/><font size=10><b>{allow}</b></font>", style_lbl),
-            "" # Empty filler
-        ]
+    # 2. INFO GRID (High Spacing)
+    # Row 1
+    row1 = [
+        Paragraph(f"REF NO:<br/><font size=10><b>{inv}</b></font>", style_lbl),
+        Paragraph(f"DATE:<br/><font size=10><b>{dt.strftime('%d-%b-%Y')}</b></font>", style_lbl),
+        Paragraph(f"TOTAL SLABS:<br/><font size=10><b>{t_slabs}</b></font>", style_lbl),
+        Paragraph(f"MINE / BLOCK:<br/><font size=10><b>{mine}</b></font>", style_lbl)
+    ]
+    # Row 2
+    row2 = [
+        Paragraph(f"THICKNESS:<br/><font size=10><b>{thk}</b></font>", style_lbl),
+        Paragraph(f"CONTAINER NO:<br/><font size=10><b>{cont}</b></font>", style_lbl),
+        Paragraph(f"ALLOWANCE:<br/><font size=10><b>{allow}</b></font>", style_lbl),
+        Paragraph("", style_lbl)
     ]
     
-    t_info = Table(info_data, colWidths=[135, 135, 135, 135])
+    t_info = Table([row1, row2], colWidths=[130, 130, 130, 130])
     t_info.setStyle(TableStyle([
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('PADDING', (0,0), (-1,-1), 10), # More padding inside info boxes
+        ('PADDING', (0,0), (-1,-1), 12), # Luxurious padding
         ('BACKGROUND', (0,0), (-1,-1), HexColor('#FAFAFA')),
     ]))
     elements.append(t_info)
-    elements.append(Spacer(1, 25))
+    elements.append(Spacer(1, 30))
 
     # 3. MAIN TABLE
     col_widths = [35, 75, 50, 50, 65, 50, 50, 65]
@@ -238,14 +266,14 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     
     t.setStyle(TableStyle([
         # Main Header (Black BG, Gold Text)
-        ('BACKGROUND', (0,0), (-1,0), BG_MAIN_HEADER),
+        ('BACKGROUND', (0,0), (-1,0), BLACK),
         ('SPAN', (2,0), (4,0)), # Span Gross
         ('SPAN', (5,0), (7,0)), # Span Net
         ('SPAN', (0,0), (0,1)), # Span S.No
         ('SPAN', (1,0), (1,1)), # Span Slab
         
         # Sub Header (Dark Grey BG, White Text)
-        ('BACKGROUND', (0,1), (-1,1), BG_SUB_HEADER),
+        ('BACKGROUND', (0,1), (-1,1), DARK_GREY),
         
         # Grid & Alignment
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
@@ -274,7 +302,7 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
         [Spacer(1, 40), Spacer(1, 40)],
         [Paragraph("______________________", style_td_norm), Paragraph("______________________<br/><b>Authorized Signatory</b>", style_td_norm)]
     ]
-    t_sig = Table(sig_data, colWidths=[270, 270])
+    t_sig = Table(sig_data, colWidths=[200, 200])
     t_sig.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER')]))
     elements.append(t_sig)
 
@@ -287,7 +315,7 @@ st.markdown("---")
 if st.button("✨ Generate Luxury Report", type="primary"):
     if total_count > 0:
         pdf = generate_smart_pdf(
-            uploaded_logo, material_name, invoice_no, date_val, thickness, 
+            final_logo_path, material_name, invoice_no, date_val, thickness, 
             container_no, mine_name, allowance_str, final_df, total_count, total_gross, total_net
         )
         st.success(f"Generated PDF for {total_count} Slabs!")
