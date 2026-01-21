@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import re
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
@@ -8,15 +9,13 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
 from reportlab.graphics.shapes import Drawing, Line
 import io
-import os
 from datetime import datetime
-from PIL import Image
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Ruvello Measurement Sheet", page_icon="📏", layout="wide")
+st.set_page_config(page_title="Ruvello Smart Measurement", page_icon="💎", layout="wide")
 
-st.title("💎 Ruvello Global: Luxury Measurement Sheet")
-st.markdown("Generate **Auto-Calculated, Multi-Page Inspection Reports** instantly.")
+st.title("💎 Ruvello Global: Smart Measurement Sheet")
+st.markdown("Generate **1000% Accurate** Packing Lists with **Auto-Calculation Logic**.")
 
 # --- SIDEBAR: SETTINGS ---
 with st.sidebar:
@@ -32,277 +31,276 @@ with st.sidebar:
     thickness = st.text_input("Thickness", value="16MM")
     container_no = st.text_input("Container No.", value="TGHU 1234567")
     mine_name = st.text_input("Mine / Block No.", value="KODAD")
-    allowance = st.text_input("Allowance", value="-5 x 4")
+    
+    st.markdown("---")
+    st.header("4. Auto-Calculation Rules")
+    st.info("👇 **Magic Rule:** Type the deduction rule below (e.g. `-5x4`). The app will auto-calculate Net dimensions.")
+    allowance_str = st.text_input("Allowance (L x H)", value="-5 x 4")
 
-# --- MAGIC PASTE FUNCTIONALITY (New Feature) ---
-with st.expander("🚀 **MAGIC PASTE FROM EXCEL (Click to Open)**", expanded=True):
+# --- LOGIC: PARSE ALLOWANCE ---
+# We extract numbers from the string "-5 x 4". 
+# Assumes First Number = Length Deduction, Second Number = Height Deduction.
+def parse_allowance(allow_str):
+    # Find all digits in the string
+    nums = re.findall(r'\d+', allow_str)
+    if len(nums) >= 2:
+        return int(nums[0]), int(nums[1])
+    elif len(nums) == 1:
+        return int(nums[0]), int(nums[0]) # Assume square if only 1 number
+    else:
+        return 0, 0
+
+deduct_l, deduct_h = parse_allowance(allowance_str)
+
+# --- SECTION: MAGIC PASTE ---
+st.subheader("5. Smart Data Entry")
+with st.expander("🚀 **PASTE EXCEL DATA (Gross L & Gross H Only)**", expanded=True):
     st.markdown("""
     **Instructions:**
-    1. Open your Excel file.
-    2. Select and Copy columns in this order: **[Slab No] [Gross L] [Gross H] [Net L] [Net H]**.
-    3. Paste them into the box below and click 'Load Data'.
-    *(Note: If you only have Gross dimensions, just paste 3 columns: Slab No, L, H)*
+    1. Copy **ONLY 2 Columns** from Excel: `[Gross Length]` and `[Gross Height]`.
+    2. Paste them below. 
+    3. The App will auto-generate Slab Numbers and Calculate Net Values based on your **Allowance Rule**.
     """)
     
-    paste_data = st.text_area("Paste Excel Data Here:", height=150, placeholder="RG-1\t280\t180\t275\t175\nRG-2\t290\t190\t285\t185")
+    paste_data = st.text_area("Paste Data Here:", height=200, placeholder="280\t180\n290\t190\n300\t200")
     
-    if st.button("⚡ Process Pasted Data", type="primary"):
-        if paste_data:
-            try:
-                # Read tab-separated values (standard Excel copy format)
-                # We assume no headers in the paste to keep it simple, or we skip bad rows
-                data_io = io.StringIO(paste_data)
-                
-                # Attempt to parse
-                pasted_df = pd.read_csv(data_io, sep="\t", header=None, on_bad_lines='skip')
-                
-                # Normalize Columns
-                num_cols = pasted_df.shape[1]
-                new_data = []
+    if paste_data:
+        # Process the pasted text
+        data_io = io.StringIO(paste_data)
+        try:
+            # Read 2 columns
+            df_input = pd.read_csv(data_io, sep="\t", header=None, names=["GL", "GH"], on_bad_lines='skip')
+            
+            # Clean Data (ensure numbers)
+            df_input["GL"] = pd.to_numeric(df_input["GL"], errors='coerce').fillna(0)
+            df_input["GH"] = pd.to_numeric(df_input["GH"], errors='coerce').fillna(0)
+            
+            # Filter valid rows
+            df_input = df_input[(df_input["GL"] > 0) & (df_input["GH"] > 0)].copy()
+            
+            # --- AUTO-CALCULATION ENGINE ---
+            # 1. Generate Slab Numbers (RG-1, RG-2...)
+            df_input["Slab No"] = [f"RG-{i+1}" for i in range(len(df_input))]
+            
+            # 2. Calculate Net Values using Allowance
+            df_input["NL"] = df_input["GL"] - deduct_l
+            df_input["NH"] = df_input["GH"] - deduct_h
+            
+            # 3. Calculate Areas
+            df_input["Gross Area"] = (df_input["GL"] * df_input["GH"]) / 10000
+            df_input["Net Area"] = (df_input["NL"] * df_input["NH"]) / 10000
+            
+            # Store in session state
+            st.session_state.smart_data = df_input
+            st.success(f"✅ Processed {len(df_input)} slabs! Applied Allowance: -{deduct_l} (L) x -{deduct_h} (H)")
+            
+        except Exception as e:
+            st.error(f"Error parsing data: {e}")
 
-                for index, row in pasted_df.iterrows():
-                    # clean data to ensure it's valid
-                    try:
-                        slab_no = str(row[0])
-                        # Assuming structure: Col 0=Name, Col 1=GL, Col 2=GH, Col 3=NL, Col 4=NH
-                        if num_cols >= 5:
-                            gl = float(str(row[1]).replace(',', '').strip())
-                            gh = float(str(row[2]).replace(',', '').strip())
-                            nl = float(str(row[3]).replace(',', '').strip())
-                            nh = float(str(row[4]).replace(',', '').strip())
-                        elif num_cols >= 3:
-                            # If only 3 cols, assume Net = Gross
-                            gl = float(str(row[1]).replace(',', '').strip())
-                            gh = float(str(row[2]).replace(',', '').strip())
-                            nl = gl
-                            nh = gh
-                        else:
-                            continue # Skip bad rows
+# --- DISPLAY DATA TABLE ---
+if "smart_data" in st.session_state:
+    final_df = st.session_state.smart_data
+    
+    # Calculate Totals
+    total_gross = final_df["Gross Area"].sum()
+    total_net = final_df["Net Area"].sum()
+    total_count = len(final_df)
+    
+    # Metrics
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Slabs", total_count)
+    m2.metric("Gross Area", f"{total_gross:.3f} m2")
+    m3.metric("Net Area", f"{total_net:.3f} m2")
+    m4.metric("Active Allowance", f"-{deduct_l} x -{deduct_h}")
 
-                        new_data.append({
-                            "Slab No": slab_no,
-                            "Gross L (cm)": gl,
-                            "Gross H (cm)": gh,
-                            "Net L (cm)": nl,
-                            "Net H (cm)": nh
-                        })
-                    except:
-                        continue # Skip rows that aren't numbers (like headers)
-
-                if new_data:
-                    st.session_state.slab_data = pd.DataFrame(new_data)
-                    st.success(f"Successfully loaded {len(new_data)} slabs!")
-                else:
-                    st.error("Could not parse data. Ensure you copied columns correctly.")
-            except Exception as e:
-                st.error(f"Error parsing data: {e}")
-
-# --- MAIN DATA ENTRY ---
-st.subheader("4. Slab Data Editor")
-
-# Initialize Session State for Data if not exists
-if "slab_data" not in st.session_state:
-    st.session_state.slab_data = pd.DataFrame(
-        [{"Slab No": f"RG-{i+1}", "Gross L (cm)": 0, "Gross H (cm)": 0, "Net L (cm)": 0, "Net H (cm)": 0} for i in range(5)]
+    # Editable Preview (In case you need to fix one specific slab)
+    st.markdown("### **Data Preview (Editable)**")
+    edited_final = st.data_editor(
+        final_df,
+        column_order=["Slab No", "GL", "GH", "NL", "NH", "Gross Area", "Net Area"],
+        column_config={
+            "GL": "Gross L", "GH": "Gross H",
+            "NL": "Net L", "NH": "Net H",
+            "Gross Area": st.column_config.NumberColumn(format="%.3f"),
+            "Net Area": st.column_config.NumberColumn(format="%.3f")
+        },
+        use_container_width=True,
+        num_rows="dynamic"
     )
-
-# Data Editor (Linked to Session State)
-edited_df = st.data_editor(
-    st.session_state.slab_data,
-    num_rows="dynamic",
-    use_container_width=True,
-    column_config={
-        "Gross L (cm)": st.column_config.NumberColumn(min_value=0, format="%d"),
-        "Gross H (cm)": st.column_config.NumberColumn(min_value=0, format="%d"),
-        "Net L (cm)": st.column_config.NumberColumn(min_value=0, format="%d"),
-        "Net H (cm)": st.column_config.NumberColumn(min_value=0, format="%d"),
-    }
-)
-
-# --- CALCULATIONS ---
-# Formula: (L * H) / 10000 = Square Meters
-calc_df = edited_df.copy()
-# Ensure numeric conversion happens before calc
-cols_to_numeric = ["Gross L (cm)", "Gross H (cm)", "Net L (cm)", "Net H (cm)"]
-for col in cols_to_numeric:
-    calc_df[col] = pd.to_numeric(calc_df[col], errors='coerce').fillna(0)
-
-calc_df["Gross Area (m2)"] = (calc_df["Gross L (cm)"] * calc_df["Gross H (cm)"]) / 10000
-calc_df["Net Area (m2)"] = (calc_df["Net L (cm)"] * calc_df["Net H (cm)"]) / 10000
-
-# Filter out empty rows
-final_data = calc_df[calc_df["Gross Area (m2)"] > 0].copy()
-total_gross_area = final_data["Gross Area (m2)"].sum()
-total_net_area = final_data["Net Area (m2)"].sum()
-total_slabs = len(final_data)
-
-# Show Totals
-col1, col2, col3 = st.columns(3)
-col1.metric("Total Slabs", f"{total_slabs}")
-col2.metric("Total Gross Area", f"{total_gross_area:.3f} m2")
-col3.metric("Total Net Area", f"{total_net_area:.3f} m2")
+else:
+    total_count = 0
+    total_gross = 0
+    total_net = 0
+    edited_final = pd.DataFrame()
 
 
-# --- PDF GENERATION ENGINE ---
-def generate_measurement_pdf(logo, material, inv_no, date_v, thick, cont_no, mine, allow, data, t_slabs, t_gross, t_net):
+# --- LUXURY PDF ENGINE ---
+def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_slabs, t_gross, t_net):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20, bottomMargin=20, leftMargin=20, rightMargin=20)
     elements = []
     styles = getSampleStyleSheet()
 
-    # --- LUXURY COLORS ---
-    GOLD = HexColor('#D4AF37')
-    BLACK = HexColor('#000000')
-    GREY = HexColor('#303030')
-    LIGHT_BG = HexColor('#FAFAFA')
+    # --- COLOR PALETTE ---
+    GOLD = HexColor('#C5A059')   # Rich Antique Gold
+    BLACK = HexColor('#101010')  # Deep Black
+    GREY = HexColor('#404040')
+    TABLE_HEADER_BG = HexColor('#000000') 
+    TABLE_SUB_BG = HexColor('#303030')
+    ZEBRA_1 = HexColor('#FFFFFF')
+    ZEBRA_2 = HexColor('#F9F9F9')
 
-    # --- STYLES ---
-    style_header = ParagraphStyle('Header', fontName='Times-Bold', fontSize=20, textColor=BLACK, alignment=1)
-    style_sub = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=8, textColor=GOLD, alignment=1, letterSpacing=3)
-    style_info_label = ParagraphStyle('InfoLbl', fontName='Helvetica-Bold', fontSize=7, textColor=GREY)
-    style_info_val = ParagraphStyle('InfoVal', fontName='Helvetica-Bold', fontSize=9, textColor=BLACK)
+    # --- TEXT STYLES ---
+    # Header
+    style_company = ParagraphStyle('Co', fontName='Times-Bold', fontSize=22, textColor=BLACK, alignment=1, spaceAfter=2)
+    style_title = ParagraphStyle('Title', fontName='Helvetica-Bold', fontSize=9, textColor=GOLD, alignment=1, letterSpacing=3, spaceAfter=15)
     
-    # Table Styles
-    style_th_main = ParagraphStyle('TH', fontName='Times-Bold', fontSize=9, textColor=GOLD, alignment=1)
-    style_th_sub = ParagraphStyle('THSub', fontName='Helvetica-Bold', fontSize=7, textColor=colors.whitesmoke, alignment=1)
-    style_td = ParagraphStyle('TD', fontName='Helvetica', fontSize=9, textColor=BLACK, alignment=1)
-    style_td_bold = ParagraphStyle('TDBold', fontName='Helvetica-Bold', fontSize=9, textColor=BLACK, alignment=1)
+    # Info Box
+    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=GREY, textTransform='uppercase')
+    style_val = ParagraphStyle('Val', fontName='Times-Bold', fontSize=10, textColor=BLACK, leading=12)
 
-    # 1. HEADER LOGO & TITLE
+    # Table
+    style_th = ParagraphStyle('TH', fontName='Times-Bold', fontSize=10, textColor=GOLD, alignment=1)
+    style_th_sub = ParagraphStyle('THs', fontName='Helvetica', fontSize=7, textColor=colors.whitesmoke, alignment=1)
+    style_td_id = ParagraphStyle('TDid', fontName='Helvetica', fontSize=9, textColor=BLACK, alignment=1)
+    style_td_bold = ParagraphStyle('TDbold', fontName='Times-Bold', fontSize=10, textColor=BLACK, alignment=1)
+    style_td_norm = ParagraphStyle('TDnorm', fontName='Times-Roman', fontSize=10, textColor=GREY, alignment=1)
+
+    # 1. HEADER
     if logo:
-        img = RLImage(logo, width=1.8*inch, height=1.4*inch, kind='proportional')
+        img = RLImage(logo, width=2.0*inch, height=1.5*inch, kind='proportional')
         img.hAlign = 'CENTER'
         elements.append(img)
     
     elements.append(Spacer(1, 10))
-    elements.append(Paragraph("RUVELLO GLOBAL LLP", style_header))
-    elements.append(Paragraph(f"INSPECTION REPORT OF {material.upper()}", style_sub))
+    elements.append(Paragraph("RUVELLO GLOBAL LLP", style_company))
+    elements.append(Paragraph(f"INSPECTION REPORT: {material.upper()}", style_title))
     
-    # Gold Divider
-    d = Drawing(500, 5)
-    d.add(Line(0, 0, 550, 0, strokeColor=GOLD, strokeWidth=1))
+    # Luxury Divider
+    d = Drawing(500, 8)
+    d.add(Line(0, 4, 550, 4, strokeColor=GOLD, strokeWidth=0.5))
+    d.add(Line(0, 1, 550, 1, strokeColor=GOLD, strokeWidth=1.5))
     elements.append(d)
     elements.append(Spacer(1, 15))
 
-    # 2. INFO BLOCK
+    # 2. INFO GRID
+    # We use a table for perfect alignment
     info_data = [
         [
-            Paragraph(f"INVOICE NO:<br/><b>{inv_no}</b>", style_info_label),
-            Paragraph(f"DATE:<br/><b>{date_v.strftime('%d-%b-%Y')}</b>", style_info_label),
-            Paragraph(f"TOTAL SLABS:<br/><b>{t_slabs}</b>", style_info_label)
+            Paragraph(f"REF NO:<br/><font size=10 color=black><b>{inv}</b></font>", style_lbl),
+            Paragraph(f"DATE:<br/><font size=10 color=black><b>{dt.strftime('%d-%b-%Y')}</b></font>", style_lbl),
+            Paragraph(f"TOTAL SLABS:<br/><font size=10 color=black><b>{t_slabs}</b></font>", style_lbl)
         ],
         [
-            Paragraph(f"THICKNESS:<br/><b>{thick}</b>", style_info_label),
-            Paragraph(f"MINE / BLOCK:<br/><b>{mine}</b>", style_info_label),
-            Paragraph(f"CONTAINER NO:<br/><b>{cont_no}</b> ({allow})", style_info_label)
+            Paragraph(f"THICKNESS:<br/><font size=10 color=black><b>{thk}</b></font>", style_lbl),
+            Paragraph(f"MINE / BLOCK:<br/><font size=10 color=black><b>{mine}</b></font>", style_lbl),
+            Paragraph(f"CONTAINER / ALLOW:<br/><font size=10 color=black><b>{cont} ({allow})</b></font>", style_lbl)
         ]
     ]
-    
     t_info = Table(info_data, colWidths=[180, 180, 180])
     t_info.setStyle(TableStyle([
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
-        ('BACKGROUND', (0,0), (-1,-1), LIGHT_BG),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('PADDING', (0,0), (-1,-1), 6),
+        ('PADDING', (0,0), (-1,-1), 8),
+        ('BACKGROUND', (0,0), (-1,-1), HexColor('#FCFCFC')),
     ]))
     elements.append(t_info)
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 20))
 
-    # 3. MEASUREMENT TABLE
+    # 3. MAIN TABLE
+    # Columns: S.No | Slab No | [Gross L | Gross H | Gross Area] | [Net L | Net H | Net Area]
+    # Widths:  30   | 70      | 50      | 50      | 70         | 50    | 50    | 70
     col_widths = [35, 75, 50, 50, 65, 50, 50, 65]
 
+    # Headers
     headers = [
         [
-            Paragraph("S.NO", style_th_main),
-            Paragraph("SLAB NO", style_th_main),
-            Paragraph("GROSS MEASUREMENT", style_th_main), "", "", 
-            Paragraph("NET MEASUREMENT", style_th_main), "", ""
+            Paragraph("S.NO", style_th),
+            Paragraph("SLAB NO", style_th),
+            Paragraph("GROSS MEASUREMENT", style_th), "", "",
+            Paragraph("NET MEASUREMENT", style_th), "", ""
         ],
         [
-            "", "", 
+            "", "",
             Paragraph("L (cm)", style_th_sub), Paragraph("H (cm)", style_th_sub), Paragraph("AREA (m2)", style_th_sub),
-            Paragraph("L (cm)", style_th_sub), Paragraph("H (cm)", style_th_sub), Paragraph("AREA (m2)", style_th_sub),
+            Paragraph("L (cm)", style_th_sub), Paragraph("H (cm)", style_th_sub), Paragraph("AREA (m2)", style_th_sub)
         ]
     ]
 
-    data_rows = []
-    for index, row in data.iterrows():
+    # Rows
+    rows = []
+    for i, row in data.iterrows():
         r = [
-            Paragraph(str(index + 1), style_td),
+            Paragraph(str(i+1), style_td_id),
             Paragraph(str(row["Slab No"]), style_td_bold),
-            # Gross
-            Paragraph(f"{row['Gross L (cm)']:.0f}", style_td),
-            Paragraph(f"{row['Gross H (cm)']:.0f}", style_td),
-            Paragraph(f"{row['Gross Area (m2)']:.3f}", style_td_bold),
-            # Net
-            Paragraph(f"{row['Net L (cm)']:.0f}", style_td),
-            Paragraph(f"{row['Net H (cm)']:.0f}", style_td),
-            Paragraph(f"{row['Net Area (m2)']:.3f}", style_td_bold),
+            Paragraph(f"{row['GL']:.0f}", style_td_norm),
+            Paragraph(f"{row['GH']:.0f}", style_td_norm),
+            Paragraph(f"<b>{row['Gross Area']:.3f}</b>", style_td_norm),
+            Paragraph(f"{row['NL']:.0f}", style_td_norm),
+            Paragraph(f"{row['NH']:.0f}", style_td_norm),
+            Paragraph(f"<b>{row['Net Area']:.3f}</b>", style_td_bold),
         ]
-        data_rows.append(r)
+        rows.append(r)
 
+    # Total Row
     total_row = [
-        "", Paragraph("<b>TOTAL</b>", style_td_bold),
-        "", "", Paragraph(f"<b>{t_gross:.3f}</b>", style_td_bold),
-        "", "", Paragraph(f"<b>{t_net:.3f}</b>", style_td_bold),
+        "", Paragraph("TOTAL", style_th),
+        "", "", Paragraph(f"{t_gross:.3f}", style_th),
+        "", "", Paragraph(f"{t_net:.3f}", style_th),
     ]
-    data_rows.append(total_row)
+    rows.append(total_row)
 
-    full_table_data = headers + data_rows
-    t_meas = Table(full_table_data, colWidths=col_widths, repeatRows=2)
-
-    t_meas.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), BLACK), 
-        ('BACKGROUND', (0,1), (-1,1), GREY),  
-        ('TEXTCOLOR', (0,0), (-1,1), GOLD),   
+    # Build
+    table_data = headers + rows
+    t = Table(table_data, colWidths=col_widths, repeatRows=2)
+    
+    t.setStyle(TableStyle([
+        # Headers
+        ('BACKGROUND', (0,0), (-1,0), TABLE_HEADER_BG),
+        ('BACKGROUND', (0,1), (-1,1), TABLE_SUB_BG),
+        ('SPAN', (2,0), (4,0)), # Span Gross
+        ('SPAN', (5,0), (7,0)), # Span Net
+        ('SPAN', (0,0), (0,1)), # Span S.No
+        ('SPAN', (1,0), (1,1)), # Span Slab
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('SPAN', (2,0), (4,0)), 
-        ('SPAN', (5,0), (7,0)), 
-        ('SPAN', (0,0), (0,1)), 
-        ('SPAN', (1,0), (1,1)), 
-        ('ROWBACKGROUNDS', (2,0), (-2,-1), [colors.white, LIGHT_BG]),
-        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
-        ('BACKGROUND', (0,-1), (-1,-1), GOLD), 
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        
+        # Zebra Rows
+        ('ROWBACKGROUNDS', (2,0), (-2,-1), [ZEBRA_1, ZBRA_2]),
+        
+        # Total Row
+        ('BACKGROUND', (0,-1), (-1,-1), GOLD),
         ('TEXTCOLOR', (0,-1), (-1,-1), BLACK),
-        ('LINEABOVE', (0,-1), (-1,-1), 1.5, BLACK),
+        ('LINEABOVE', (0,-1), (-1,-1), 2, BLACK),
     ]))
     
-    elements.append(t_meas)
-    elements.append(Spacer(1, 30))
+    elements.append(t)
+    elements.append(Spacer(1, 40))
 
-    # 4. SIGNATURES
+    # 4. SIGNATURE
     sig_data = [
-        [Paragraph("Inspected By:", style_td), Paragraph("Authorized Signatory:", style_td)],
+        [Paragraph("Inspected By:", style_td_norm), Paragraph("For RUVELLO GLOBAL LLP:", style_td_norm)],
         [Spacer(1, 40), Spacer(1, 40)],
-        [Paragraph("_______________________", style_td), Paragraph("_______________________<br/><b>For RUVELLO GLOBAL LLP</b>", style_td)]
+        [Paragraph("______________________", style_td_norm), Paragraph("______________________<br/><b>Authorized Signatory</b>", style_td_norm)]
     ]
     t_sig = Table(sig_data, colWidths=[270, 270])
-    t_sig.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-    ]))
+    t_sig.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER')]))
     elements.append(t_sig)
 
     doc.build(elements)
     buffer.seek(0)
     return buffer
 
-# --- GENERATE BUTTON ---
+# --- BUTTON ---
 st.markdown("---")
-if st.button("✨ Generate Measurement Sheet", type="primary"):
-    if total_slabs == 0:
-        st.error("Please enter dimensions for at least one slab!")
-    else:
-        pdf_bytes = generate_measurement_pdf(
+if st.button("✨ Generate PDF Report", type="primary"):
+    if total_count > 0:
+        pdf = generate_smart_pdf(
             uploaded_logo, material_name, invoice_no, date_val, thickness, 
-            container_no, mine_name, allowance, final_data, total_slabs, total_gross_area, total_net_area
+            container_no, mine_name, allowance_str, edited_final, total_count, total_gross, total_net
         )
-        st.success(f"Generated Sheet for {total_slabs} Slabs!")
-        st.download_button(
-            label="Download PDF 📥",
-            data=pdf_bytes,
-            file_name=f"Measurement_{material_name}_{invoice_no}.pdf",
-            mime="application/pdf"
-        )
+        st.success(f"Report Generated for {total_count} Slabs!")
+        st.download_button("Download PDF 📥", data=pdf, file_name=f"Report_{material_name}.pdf", mime="application/pdf")
+    else:
+        st.error("No data found! Please paste Gross dimensions above.")
