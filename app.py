@@ -16,13 +16,13 @@ from datetime import datetime
 st.set_page_config(page_title="Ruvello Measurement", page_icon="💎", layout="wide")
 
 st.title("💎 Ruvello Global: Ultimate Measurement Sheet")
-st.markdown("Generate **Zero-Overlap, Perfect Luxury** Inspection Reports.")
+st.markdown("Generate **Zero-Overlap, Gold-Standard** Inspection Reports.")
 
 # --- SIDEBAR: SETTINGS ---
 with st.sidebar:
     st.header("1. Assets & Meta")
     
-    # LOGIC: Check if logo.png exists in GitHub/Folder
+    # Auto-load logo if exists
     default_logo = None
     if os.path.exists("logo.png"):
         default_logo = "logo.png"
@@ -116,36 +116,34 @@ else:
     final_df = pd.DataFrame()
 
 
-# --- LUXURY PDF ENGINE (RIGID GRID SYSTEM) ---
+# --- LUXURY PDF ENGINE (FIXED LAYOUT) ---
 def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_slabs, t_gross, t_net):
     buffer = io.BytesIO()
-    # A4 Size: ~595 pts width
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=30, bottomMargin=30, leftMargin=30, rightMargin=30)
     elements = []
     
-    # --- PALETTE (Unified Luxury) ---
-    GOLD = HexColor('#C5A059')
-    BLACK = HexColor('#000000') 
-    DARK_GREY = HexColor('#252525')
+    # --- PALETTE ---
+    GOLD = HexColor('#C5A059')   # Rich Metallic Gold
+    BLACK = HexColor('#000000')  # Jet Black
     WHITE = HexColor('#FFFFFF')
-    LIGHT_GREY = HexColor('#F2F2F2') 
+    DARK_GREY = HexColor('#202020')
+    LIGHT_GREY = HexColor('#F4F4F4') 
     
     # --- STYLES ---
     styles = getSampleStyleSheet()
     
-    # Company Name: Increased leading to prevent crush
+    # Header Styles
     style_co = ParagraphStyle('Co', fontName='Times-Bold', fontSize=26, textColor=BLACK, alignment=1, leading=30)
-    
-    # Address: Much smaller font, higher leading for breathability
-    style_addr = ParagraphStyle('Ad', fontName='Helvetica', fontSize=8, textColor=DARK_GREY, alignment=1, leading=12)
-    
+    style_addr = ParagraphStyle('Ad', fontName='Helvetica', fontSize=8, textColor=HexColor('#404040'), alignment=1, leading=12)
     style_sub = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=10, textColor=GOLD, alignment=1, letterSpacing=2)
     
-    # Info Box Labels
-    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=DARK_GREY, textTransform='uppercase')
+    # Info Grid Labels
+    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=HexColor('#555555'), textTransform='uppercase')
     
-    # Table Headers: ALL BLACK BACKGROUND for unity
-    style_th_main = ParagraphStyle('THm', fontName='Times-Bold', fontSize=10, textColor=GOLD, alignment=1)
+    # --- NEW TABLE HEADER STYLES ---
+    # Top Row: Gold Background + Black Text
+    style_th_main = ParagraphStyle('THm', fontName='Times-Bold', fontSize=10, textColor=BLACK, alignment=1)
+    # Second Row: Black Background + White Text
     style_th_sub = ParagraphStyle('THs', fontName='Helvetica-Bold', fontSize=8, textColor=WHITE, alignment=1)
     
     # Data Cells
@@ -153,12 +151,10 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     style_td_bold = ParagraphStyle('TDbold', fontName='Times-Bold', fontSize=10, textColor=BLACK, alignment=1)
     style_td_norm = ParagraphStyle('TDnorm', fontName='Times-Roman', fontSize=10, textColor=DARK_GREY, alignment=1)
 
-    # 1. RIGID HEADER GRID (Solves Overlapping)
-    # We place everything in a Table so rows auto-expand and cannot overlap
-    
+    # 1. RIGID HEADER GRID (Prevents Overlap)
     header_rows = []
     
-    # Row 1: Logo
+    # Logo
     if logo:
         if isinstance(logo, str):
             img = RLImage(logo, width=2.2*inch, height=1.6*inch, kind='proportional')
@@ -167,36 +163,36 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
             img = RLImage(logo, width=2.2*inch, height=1.6*inch, kind='proportional')
         header_rows.append([img])
     
-    # Row 2: Company Name (with padding)
+    # Company Name
     header_rows.append([Paragraph("RUVELLO GLOBAL LLP", style_co)])
     
-    # Row 3: Address (with padding)
+    # Address
     addr_text = """1305, Uniyaro Ka Rasta, Chandpol Bazar, Jaipur, Rajasthan, INDIA - 302001<br/>
     Email: Rahul@ruvello.com | +91 9636648894"""
     header_rows.append([Paragraph(addr_text, style_addr)])
     
-    # Row 4: Title
+    # Report Title
     header_rows.append([Paragraph(f"INSPECTION REPORT: {material.upper()}", style_sub)])
     
-    # Create the Layout Table
+    # Layout Table
     t_layout = Table(header_rows, colWidths=[530])
     t_layout.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('TOPPADDING', (0,1), (-1,1), 5),  # Space above Name
-        ('BOTTOMPADDING', (0,1), (-1,1), 5), # Space below Name
-        ('TOPPADDING', (0,2), (-1,2), 5),  # Space above Address
-        ('BOTTOMPADDING', (0,2), (-1,2), 15), # Large space below Address
+        ('TOPPADDING', (0,1), (-1,1), 6),
+        ('BOTTOMPADDING', (0,1), (-1,1), 4),
+        ('TOPPADDING', (0,2), (-1,2), 4),
+        ('BOTTOMPADDING', (0,2), (-1,2), 12),
     ]))
     elements.append(t_layout)
     
-    # Gold Line Divider
+    # Gold Divider
     d = Drawing(500, 5)
     d.add(Line(0, 0, 535, 0, strokeColor=GOLD, strokeWidth=1.5))
     elements.append(d)
     elements.append(Spacer(1, 20))
 
-    # 2. INFO GRID (Clean & Spacious)
+    # 2. INFO GRID
     row1 = [
         Paragraph(f"REF NO:<br/><font size=10><b>{inv}</b></font>", style_lbl),
         Paragraph(f"DATE:<br/><font size=10><b>{dt.strftime('%d-%b-%Y')}</b></font>", style_lbl),
@@ -212,7 +208,7 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     
     t_info = Table([row1, row2], colWidths=[133, 133, 133, 133])
     t_info.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 0.5, HexColor('#E0E0E0')),
+        ('GRID', (0,0), (-1,-1), 0.5, HexColor('#DDDDDD')),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('PADDING', (0,0), (-1,-1), 12),
         ('BACKGROUND', (0,0), (-1,-1), HexColor('#FAFAFA')),
@@ -220,8 +216,7 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     elements.append(t_info)
     elements.append(Spacer(1, 25))
 
-    # 3. MAIN TABLE (Unified Colors)
-    # Increased widths slightly to fill page
+    # 3. MAIN TABLE
     col_widths = [40, 80, 60, 60, 75, 60, 60, 75]
     
     headers = [
@@ -263,16 +258,22 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     t = Table(headers + rows, colWidths=col_widths, repeatRows=2)
     
     t.setStyle(TableStyle([
-        # --- HEADER SECTION (UNIFIED BLACK) ---
-        ('BACKGROUND', (0,0), (-1,0), BLACK),       # Main Header Black
-        ('BACKGROUND', (0,1), (-1,1), DARK_GREY),   # Sub Header Dark Grey
+        # --- HEADER 1: GOLD BACKGROUND, BLACK TEXT (GOLD BAR LOOK) ---
+        ('BACKGROUND', (0,0), (-1,0), GOLD),
+        ('TEXTCOLOR', (0,0), (-1,0), BLACK),
+        
+        # --- HEADER 2: BLACK BACKGROUND, WHITE TEXT ---
+        ('BACKGROUND', (0,1), (-1,1), BLACK),
+        ('TEXTCOLOR', (0,1), (-1,1), WHITE),
+        
+        # Spans
         ('SPAN', (2,0), (4,0)), # Span Gross
         ('SPAN', (5,0), (7,0)), # Span Net
         ('SPAN', (0,0), (0,1)), # Span S.No
         ('SPAN', (1,0), (1,1)), # Span Slab
         
         # Grid & Alignment
-        ('GRID', (0,0), (-1,-1), 0.5, HexColor('#D0D0D0')),
+        ('GRID', (0,0), (-1,-1), 0.5, HexColor('#CCCCCC')),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         
@@ -280,10 +281,10 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
         ('TOPPADDING', (0,0), (-1,-1), 7),
         ('BOTTOMPADDING', (0,0), (-1,-1), 7),
         
-        # Zebra Rows (Subtle)
+        # Zebra Rows
         ('ROWBACKGROUNDS', (2,0), (-2,-1), [WHITE, LIGHT_GREY]),
         
-        # Total Row (Black & Gold)
+        # Total Row (Black BG, Gold Text)
         ('BACKGROUND', (0,-1), (-1,-1), BLACK),
         ('TEXTCOLOR', (0,-1), (-1,-1), GOLD),
         ('LINEABOVE', (0,-1), (-1,-1), 2, GOLD),
