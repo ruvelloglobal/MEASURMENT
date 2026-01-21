@@ -14,8 +14,8 @@ from datetime import datetime
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Ruvello Smart Measurement", page_icon="💎", layout="wide")
 
-st.title("💎 Ruvello Global: Smart Measurement Sheet")
-st.markdown("Generate **1000% Accurate** Packing Lists with **Auto-Calculation Logic**.")
+st.title("💎 Ruvello Global: Precision Measurement App")
+st.markdown("Generate **Ultra-Luxury** Packing Lists with **Dual-Column Smart Entry**.")
 
 # --- SIDEBAR: SETTINGS ---
 with st.sidebar:
@@ -33,105 +33,112 @@ with st.sidebar:
     mine_name = st.text_input("Mine / Block No.", value="KODAD")
     
     st.markdown("---")
-    st.header("4. Auto-Calculation Rules")
-    st.info("👇 **Magic Rule:** Type the deduction rule below (e.g. `-5x4`). The app will auto-calculate Net dimensions.")
-    allowance_str = st.text_input("Allowance (L x H)", value="-5 x 4")
+    st.header("4. Deduction Rules")
+    st.info("👇 **Rule:** First number deducts from **Height**, Second from **Length**.")
+    allowance_str = st.text_input("Allowance (H x L)", value="-5 x 4")
 
 # --- LOGIC: PARSE ALLOWANCE ---
-# We extract numbers from the string "-5 x 4". 
-# Assumes First Number = Length Deduction, Second Number = Height Deduction.
+# Rule: "-5 x 4" -> Deduct 5 from HEIGHT, Deduct 4 from LENGTH
 def parse_allowance(allow_str):
-    # Find all digits in the string
     nums = re.findall(r'\d+', allow_str)
     if len(nums) >= 2:
-        return int(nums[0]), int(nums[1])
+        return int(nums[0]), int(nums[1]) # 1st=Height, 2nd=Length
     elif len(nums) == 1:
-        return int(nums[0]), int(nums[0]) # Assume square if only 1 number
+        return int(nums[0]), int(nums[0])
     else:
         return 0, 0
 
-deduct_l, deduct_h = parse_allowance(allowance_str)
+deduct_h, deduct_l = parse_allowance(allowance_str)
 
-# --- SECTION: MAGIC PASTE ---
-st.subheader("5. Smart Data Entry")
-with st.expander("🚀 **PASTE EXCEL DATA (Gross L & Gross H Only)**", expanded=True):
-    st.markdown("""
-    **Instructions:**
-    1. Copy **ONLY 2 Columns** from Excel: `[Gross Length]` and `[Gross Height]`.
-    2. Paste them below. 
-    3. The App will auto-generate Slab Numbers and Calculate Net Values based on your **Allowance Rule**.
-    """)
-    
-    paste_data = st.text_area("Paste Data Here:", height=200, placeholder="280\t180\n290\t190\n300\t200")
-    
-    if paste_data:
-        # Process the pasted text
-        data_io = io.StringIO(paste_data)
+# --- SECTION: DUAL COLUMN ENTRY ---
+st.subheader("5. Smart Data Entry (2 Columns)")
+st.markdown("Copy the **Gross Length** column and **Gross Height** column separately from Excel.")
+
+paste_col1, paste_col2 = st.columns(2)
+
+with paste_col1:
+    st.markdown("**Paste GROSS LENGTHS Here:**")
+    raw_L = st.text_area("Column L", height=300, placeholder="280\n290\n300")
+
+with paste_col2:
+    st.markdown("**Paste GROSS HEIGHTS Here:**")
+    raw_H = st.text_area("Column H", height=300, placeholder="180\n190\n200")
+
+# --- PROCESSING ENGINE ---
+if st.button("⚡ Process & Calculate", type="primary"):
+    if raw_L and raw_H:
         try:
-            # Read 2 columns
-            df_input = pd.read_csv(data_io, sep="\t", header=None, names=["GL", "GH"], on_bad_lines='skip')
+            # 1. Split and Clean Data
+            list_L = [float(x.strip()) for x in raw_L.split('\n') if x.strip()]
+            list_H = [float(x.strip()) for x in raw_H.split('\n') if x.strip()]
             
-            # Clean Data (ensure numbers)
-            df_input["GL"] = pd.to_numeric(df_input["GL"], errors='coerce').fillna(0)
-            df_input["GH"] = pd.to_numeric(df_input["GH"], errors='coerce').fillna(0)
-            
-            # Filter valid rows
-            df_input = df_input[(df_input["GL"] > 0) & (df_input["GH"] > 0)].copy()
-            
-            # --- AUTO-CALCULATION ENGINE ---
-            # 1. Generate Slab Numbers (RG-1, RG-2...)
-            df_input["Slab No"] = [f"RG-{i+1}" for i in range(len(df_input))]
-            
-            # 2. Calculate Net Values using Allowance
-            df_input["NL"] = df_input["GL"] - deduct_l
-            df_input["NH"] = df_input["GH"] - deduct_h
-            
-            # 3. Calculate Areas
-            df_input["Gross Area"] = (df_input["GL"] * df_input["GH"]) / 10000
-            df_input["Net Area"] = (df_input["NL"] * df_input["NH"]) / 10000
-            
-            # Store in session state
-            st.session_state.smart_data = df_input
-            st.success(f"✅ Processed {len(df_input)} slabs! Applied Allowance: -{deduct_l} (L) x -{deduct_h} (H)")
-            
-        except Exception as e:
-            st.error(f"Error parsing data: {e}")
+            # 2. Validation
+            if len(list_L) != len(list_H):
+                st.error(f"⚠️ Mismatch! Found {len(list_L)} Lengths but {len(list_H)} Heights. Please check your data.")
+            else:
+                # 3. Create DataFrame
+                df_new = pd.DataFrame({
+                    "GL": list_L,
+                    "GH": list_H
+                })
+                
+                # 4. Auto-Numbering
+                df_new["Slab No"] = [f"RG-{i+1}" for i in range(len(df_new))]
+                
+                # 5. Smart Deduction (Net = Gross - Deduction)
+                df_new["NL"] = df_new["GL"] - deduct_l
+                df_new["NH"] = df_new["GH"] - deduct_h
+                
+                # 6. Area Calculation
+                df_new["Gross Area"] = (df_new["GL"] * df_new["GH"]) / 10000
+                df_new["Net Area"] = (df_new["NL"] * df_new["NH"]) / 10000
+                
+                # Save to Session
+                st.session_state.smart_data = df_new
+                st.success(f"✅ Successfully processed {len(df_new)} slabs!")
+                
+        except ValueError:
+            st.error("Error: Please ensure you pasted only Numbers (no text headers).")
+    else:
+        st.warning("Please paste data into both columns.")
 
 # --- DISPLAY DATA TABLE ---
 if "smart_data" in st.session_state:
     final_df = st.session_state.smart_data
     
-    # Calculate Totals
+    # Totals
     total_gross = final_df["Gross Area"].sum()
     total_net = final_df["Net Area"].sum()
     total_count = len(final_df)
     
     # Metrics
+    st.markdown("---")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Total Slabs", total_count)
     m2.metric("Gross Area", f"{total_gross:.3f} m2")
     m3.metric("Net Area", f"{total_net:.3f} m2")
-    m4.metric("Active Allowance", f"-{deduct_l} x -{deduct_h}")
+    m4.metric("Applied Deduction", f"H -{deduct_h} | L -{deduct_l}")
 
-    # Editable Preview (In case you need to fix one specific slab)
-    st.markdown("### **Data Preview (Editable)**")
-    edited_final = st.data_editor(
+    # Preview
+    st.markdown("### **Final Data Preview**")
+    st.dataframe(
         final_df,
         column_order=["Slab No", "GL", "GH", "NL", "NH", "Gross Area", "Net Area"],
         column_config={
-            "GL": "Gross L", "GH": "Gross H",
-            "NL": "Net L", "NH": "Net H",
+            "GL": st.column_config.NumberColumn("Gross L", format="%d"),
+            "GH": st.column_config.NumberColumn("Gross H", format="%d"),
+            "NL": st.column_config.NumberColumn("Net L", format="%d"),
+            "NH": st.column_config.NumberColumn("Net H", format="%d"),
             "Gross Area": st.column_config.NumberColumn(format="%.3f"),
             "Net Area": st.column_config.NumberColumn(format="%.3f")
         },
-        use_container_width=True,
-        num_rows="dynamic"
+        use_container_width=True
     )
 else:
     total_count = 0
     total_gross = 0
     total_net = 0
-    edited_final = pd.DataFrame()
+    final_df = pd.DataFrame()
 
 
 # --- LUXURY PDF ENGINE ---
@@ -139,29 +146,26 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20, bottomMargin=20, leftMargin=20, rightMargin=20)
     elements = []
-    styles = getSampleStyleSheet()
-
-    # --- COLOR PALETTE ---
-    GOLD = HexColor('#C5A059')   # Rich Antique Gold
-    BLACK = HexColor('#101010')  # Deep Black
-    GREY = HexColor('#404040')
-    TABLE_HEADER_BG = HexColor('#000000') 
-    TABLE_SUB_BG = HexColor('#303030')
-    ZEBRA_1 = HexColor('#FFFFFF')
-    ZEBRA_2 = HexColor('#F9F9F9')
-
-    # --- TEXT STYLES ---
-    # Header
-    style_company = ParagraphStyle('Co', fontName='Times-Bold', fontSize=22, textColor=BLACK, alignment=1, spaceAfter=2)
-    style_title = ParagraphStyle('Title', fontName='Helvetica-Bold', fontSize=9, textColor=GOLD, alignment=1, letterSpacing=3, spaceAfter=15)
     
-    # Info Box
-    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=GREY, textTransform='uppercase')
-    style_val = ParagraphStyle('Val', fontName='Times-Bold', fontSize=10, textColor=BLACK, leading=12)
+    # --- PALETTE ---
+    GOLD = HexColor('#C5A059')   
+    BLACK = HexColor('#101010') 
+    GREY = HexColor('#404040')
+    HEADER_BG = HexColor('#000000') 
+    SUB_HEADER_BG = HexColor('#252525')
+    ZEBRA_EVEN = HexColor('#FFFFFF')
+    ZEBRA_ODD = HexColor('#FAFAFA')
 
-    # Table
-    style_th = ParagraphStyle('TH', fontName='Times-Bold', fontSize=10, textColor=GOLD, alignment=1)
-    style_th_sub = ParagraphStyle('THs', fontName='Helvetica', fontSize=7, textColor=colors.whitesmoke, alignment=1)
+    # --- STYLES ---
+    styles = getSampleStyleSheet()
+    style_co = ParagraphStyle('Co', fontName='Times-Bold', fontSize=22, textColor=BLACK, alignment=1)
+    style_sub = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=9, textColor=GOLD, alignment=1, letterSpacing=3)
+    
+    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=GREY, textTransform='uppercase')
+    
+    style_th_gold = ParagraphStyle('THg', fontName='Times-Bold', fontSize=10, textColor=GOLD, alignment=1)
+    style_th_wht = ParagraphStyle('THw', fontName='Helvetica', fontSize=8, textColor=colors.whitesmoke, alignment=1)
+    
     style_td_id = ParagraphStyle('TDid', fontName='Helvetica', fontSize=9, textColor=BLACK, alignment=1)
     style_td_bold = ParagraphStyle('TDbold', fontName='Times-Bold', fontSize=10, textColor=BLACK, alignment=1)
     style_td_norm = ParagraphStyle('TDnorm', fontName='Times-Roman', fontSize=10, textColor=GREY, alignment=1)
@@ -173,10 +177,9 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
         elements.append(img)
     
     elements.append(Spacer(1, 10))
-    elements.append(Paragraph("RUVELLO GLOBAL LLP", style_company))
-    elements.append(Paragraph(f"INSPECTION REPORT: {material.upper()}", style_title))
+    elements.append(Paragraph("RUVELLO GLOBAL LLP", style_co))
+    elements.append(Paragraph(f"INSPECTION REPORT: {material.upper()}", style_sub))
     
-    # Luxury Divider
     d = Drawing(500, 8)
     d.add(Line(0, 4, 550, 4, strokeColor=GOLD, strokeWidth=0.5))
     d.add(Line(0, 1, 550, 1, strokeColor=GOLD, strokeWidth=1.5))
@@ -184,10 +187,9 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     elements.append(Spacer(1, 15))
 
     # 2. INFO GRID
-    # We use a table for perfect alignment
     info_data = [
         [
-            Paragraph(f"REF NO:<br/><font size=10 color=black><b>{inv}</b></font>", style_lbl),
+            Paragraph(f"INVOICE NO:<br/><font size=10 color=black><b>{inv}</b></font>", style_lbl),
             Paragraph(f"DATE:<br/><font size=10 color=black><b>{dt.strftime('%d-%b-%Y')}</b></font>", style_lbl),
             Paragraph(f"TOTAL SLABS:<br/><font size=10 color=black><b>{t_slabs}</b></font>", style_lbl)
         ],
@@ -202,32 +204,30 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('PADDING', (0,0), (-1,-1), 8),
-        ('BACKGROUND', (0,0), (-1,-1), HexColor('#FCFCFC')),
+        ('BACKGROUND', (0,0), (-1,-1), HexColor('#FDFDFD')),
     ]))
     elements.append(t_info)
     elements.append(Spacer(1, 20))
 
     # 3. MAIN TABLE
-    # Columns: S.No | Slab No | [Gross L | Gross H | Gross Area] | [Net L | Net H | Net Area]
-    # Widths:  30   | 70      | 50      | 50      | 70         | 50    | 50    | 70
     col_widths = [35, 75, 50, 50, 65, 50, 50, 65]
-
-    # Headers
+    
+    # Header Rows
     headers = [
         [
-            Paragraph("S.NO", style_th),
-            Paragraph("SLAB NO", style_th),
-            Paragraph("GROSS MEASUREMENT", style_th), "", "",
-            Paragraph("NET MEASUREMENT", style_th), "", ""
+            Paragraph("S.NO", style_th_gold),
+            Paragraph("SLAB NO", style_th_gold),
+            Paragraph("GROSS MEASUREMENT", style_th_gold), "", "",
+            Paragraph("NET MEASUREMENT", style_th_gold), "", ""
         ],
         [
             "", "",
-            Paragraph("L (cm)", style_th_sub), Paragraph("H (cm)", style_th_sub), Paragraph("AREA (m2)", style_th_sub),
-            Paragraph("L (cm)", style_th_sub), Paragraph("H (cm)", style_th_sub), Paragraph("AREA (m2)", style_th_sub)
+            Paragraph("L (cm)", style_th_wht), Paragraph("H (cm)", style_th_wht), Paragraph("AREA (m2)", style_th_wht),
+            Paragraph("L (cm)", style_th_wht), Paragraph("H (cm)", style_th_wht), Paragraph("AREA (m2)", style_th_wht)
         ]
     ]
 
-    # Rows
+    # Data Rows
     rows = []
     for i, row in data.iterrows():
         r = [
@@ -244,20 +244,20 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
 
     # Total Row
     total_row = [
-        "", Paragraph("TOTAL", style_th),
-        "", "", Paragraph(f"{t_gross:.3f}", style_th),
-        "", "", Paragraph(f"{t_net:.3f}", style_th),
+        "", Paragraph("TOTAL", style_th_gold),
+        "", "", Paragraph(f"<b>{t_gross:.3f}</b>", style_th_gold),
+        "", "", Paragraph(f"<b>{t_net:.3f}</b>", style_th_gold),
     ]
     rows.append(total_row)
 
-    # Build
+    # Build Table
     table_data = headers + rows
     t = Table(table_data, colWidths=col_widths, repeatRows=2)
     
     t.setStyle(TableStyle([
         # Headers
-        ('BACKGROUND', (0,0), (-1,0), TABLE_HEADER_BG),
-        ('BACKGROUND', (0,1), (-1,1), TABLE_SUB_BG),
+        ('BACKGROUND', (0,0), (-1,0), HEADER_BG),
+        ('BACKGROUND', (0,1), (-1,1), SUB_HEADER_BG),
         ('SPAN', (2,0), (4,0)), # Span Gross
         ('SPAN', (5,0), (7,0)), # Span Net
         ('SPAN', (0,0), (0,1)), # Span S.No
@@ -265,14 +265,16 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('BOTTOMPADDING', (0,0), (-1,1), 8),
+        ('TOPPADDING', (0,0), (-1,1), 8),
         
         # Zebra Rows
-        ('ROWBACKGROUNDS', (2,0), (-2,-1), [ZEBRA_1, ZBRA_2]),
+        ('ROWBACKGROUNDS', (2,0), (-2,-1), [ZEBRA_EVEN, ZEBRA_ODD]),
         
         # Total Row
-        ('BACKGROUND', (0,-1), (-1,-1), GOLD),
-        ('TEXTCOLOR', (0,-1), (-1,-1), BLACK),
-        ('LINEABOVE', (0,-1), (-1,-1), 2, BLACK),
+        ('BACKGROUND', (0,-1), (-1,-1), BLACK),
+        ('TEXTCOLOR', (0,-1), (-1,-1), GOLD),
+        ('LINEABOVE', (0,-1), (-1,-1), 2, GOLD),
     ]))
     
     elements.append(t)
@@ -294,13 +296,11 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
 
 # --- BUTTON ---
 st.markdown("---")
-if st.button("✨ Generate PDF Report", type="primary"):
+if st.button("✨ Generate Luxury Report", type="primary"):
     if total_count > 0:
         pdf = generate_smart_pdf(
             uploaded_logo, material_name, invoice_no, date_val, thickness, 
-            container_no, mine_name, allowance_str, edited_final, total_count, total_gross, total_net
+            container_no, mine_name, allowance_str, final_df, total_count, total_gross, total_net
         )
-        st.success(f"Report Generated for {total_count} Slabs!")
+        st.success(f"Generated PDF for {total_count} Slabs!")
         st.download_button("Download PDF 📥", data=pdf, file_name=f"Report_{material_name}.pdf", mime="application/pdf")
-    else:
-        st.error("No data found! Please paste Gross dimensions above.")
