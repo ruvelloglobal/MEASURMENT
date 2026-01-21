@@ -16,7 +16,7 @@ from datetime import datetime
 st.set_page_config(page_title="Ruvello Measurement", page_icon="💎", layout="wide")
 
 st.title("💎 Ruvello Global: Ultimate Measurement Sheet")
-st.markdown("Generate **Signed, Sealed, Luxury** Inspection Reports.")
+st.markdown("Generate **Zero-Overlap, 100% Calculated** Luxury Reports.")
 
 # --- SIDEBAR: SETTINGS ---
 with st.sidebar:
@@ -110,7 +110,7 @@ else:
     final_df = pd.DataFrame()
 
 
-# --- LUXURY PDF ENGINE ---
+# --- LUXURY PDF ENGINE (FINAL) ---
 def generate_smart_pdf(logo, sig, material, inv, dt, thk, cont, mine, allow, data, t_slabs, t_gross, t_net):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=30, bottomMargin=30, leftMargin=30, rightMargin=30)
@@ -121,45 +121,56 @@ def generate_smart_pdf(logo, sig, material, inv, dt, thk, cont, mine, allow, dat
     BLACK = HexColor('#101010')  
     WHITE = HexColor('#FFFFFF')  
     DARK_GREY = HexColor('#303030')
+    LIGHT_GREY = HexColor('#FAFAFA')
     
     # --- STYLES ---
     styles = getSampleStyleSheet()
+    
+    # Header Typography
     style_co = ParagraphStyle('Co', fontName='Times-Bold', fontSize=26, textColor=BLACK, alignment=1, leading=30)
-    style_addr = ParagraphStyle('Ad', fontName='Helvetica', fontSize=8, textColor=DARK_GREY, alignment=1, leading=12)
+    # Contact Line Style
+    style_contact = ParagraphStyle('Ct', fontName='Helvetica', fontSize=8, textColor=DARK_GREY, alignment=1, leading=12)
     style_sub = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=10, textColor=GOLD, alignment=1, letterSpacing=2)
     style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=HexColor('#555555'), textTransform='uppercase')
     
     # Table Styles
     style_th_main = ParagraphStyle('THm', fontName='Times-Bold', fontSize=10, textColor=GOLD, alignment=1)
     style_th_sub = ParagraphStyle('THs', fontName='Helvetica', fontSize=8, textColor=BLACK, alignment=1)
+    
     style_td_id = ParagraphStyle('TDid', fontName='Helvetica', fontSize=9, textColor=BLACK, alignment=1)
     style_td_bold = ParagraphStyle('TDbold', fontName='Times-Bold', fontSize=10, textColor=BLACK, alignment=1)
     style_td_norm = ParagraphStyle('TDnorm', fontName='Times-Roman', fontSize=10, textColor=DARK_GREY, alignment=1)
 
-    # 1. HEADER
+    # 1. HEADER (Rigid & Clean)
     header_rows = []
+    
+    # Logo
     if logo:
         logo_obj = logo if isinstance(logo, str) else (logo.seek(0) or logo)
         img = RLImage(logo_obj, width=2.2*inch, height=1.6*inch, kind='proportional')
         header_rows.append([img])
     
+    # Company Name
     header_rows.append([Paragraph("RUVELLO GLOBAL LLP", style_co)])
     
-    # UPDATED EMAIL ORDER
-    addr_text = """1305, Uniyaro Ka Rasta, Chandpol Bazar, Jaipur, Rajasthan, INDIA - 302001<br/>
-    Email: ruvelloglobal@gmail.com | Rahul@ruvello.com | +91 9636648894"""
-    header_rows.append([Paragraph(addr_text, style_addr)])
+    # Address & Website Block
+    # Website added prominently
+    contact_text = """1305, Uniyaro Ka Rasta, Chandpol Bazar, Jaipur, Rajasthan, INDIA - 302001<br/>
+    <b>www.ruvello.com</b> | ruvelloglobal@gmail.com | +91 9636648894"""
+    header_rows.append([Paragraph(contact_text, style_contact)])
     
+    # Title
     header_rows.append([Paragraph(f"INSPECTION REPORT: {material.upper()}", style_sub)])
     
     t_layout = Table(header_rows, colWidths=[530])
     t_layout.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0,2), (-1,2), 12),
+        ('BOTTOMPADDING', (0,2), (-1,2), 12), # Space after address
     ]))
     elements.append(t_layout)
     
+    # Gold Divider
     d = Drawing(500, 5)
     d.add(Line(0, 0, 535, 0, strokeColor=GOLD, strokeWidth=1.5))
     elements.append(d)
@@ -189,7 +200,7 @@ def generate_smart_pdf(logo, sig, material, inv, dt, thk, cont, mine, allow, dat
     elements.append(t_info)
     elements.append(Spacer(1, 25))
 
-    # 3. MAIN TABLE
+    # 3. MAIN TABLE (White Glove Design)
     col_widths = [40, 80, 60, 60, 75, 60, 60, 75]
     
     headers = [
@@ -229,18 +240,27 @@ def generate_smart_pdf(logo, sig, material, inv, dt, thk, cont, mine, allow, dat
 
     t = Table(headers + rows, colWidths=col_widths, repeatRows=2)
     t.setStyle(TableStyle([
+        # Header 1: White BG, Gold Text
         ('BACKGROUND', (0,0), (-1,0), WHITE),
         ('TEXTCOLOR', (0,0), (-1,0), GOLD),
         ('LINEBELOW', (0,0), (-1,0), 0.5, GOLD),
+        
+        # Header 2: White BG, Black Text
         ('BACKGROUND', (0,1), (-1,1), WHITE),
         ('TEXTCOLOR', (0,1), (-1,1), BLACK),
         ('LINEBELOW', (0,1), (-1,1), 1.5, GOLD),
+        
+        # Spans & Alignment
         ('SPAN', (2,0), (4,0)), ('SPAN', (5,0), (7,0)),
         ('SPAN', (0,0), (0,1)), ('SPAN', (1,0), (1,1)),
         ('GRID', (0,0), (-1,-1), 0.5, HexColor('#DDDDDD')),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('ROWBACKGROUNDS', (2,0), (-2,-1), [WHITE, HexColor('#FAFAFA')]),
+        
+        # Zebra Rows (Subtle)
+        ('ROWBACKGROUNDS', (2,0), (-2,-1), [WHITE, LIGHT_GREY]),
+        
+        # Total Row (Black BG, Gold Text)
         ('BACKGROUND', (0,-1), (-1,-1), BLACK),
         ('TEXTCOLOR', (0,-1), (-1,-1), GOLD),
         ('LINEABOVE', (0,-1), (-1,-1), 2, GOLD),
@@ -248,24 +268,22 @@ def generate_smart_pdf(logo, sig, material, inv, dt, thk, cont, mine, allow, dat
     elements.append(t)
     elements.append(Spacer(1, 40))
 
-    # 4. SIGNATURE (Aligned Right, No "Inspected By")
+    # 4. SIGNATURE
     sig_content = []
     sig_content.append(Paragraph("For RUVELLO GLOBAL LLP", style_td_norm))
     sig_content.append(Spacer(1, 10))
     
     if sig:
         sig_obj = sig if isinstance(sig, str) else (sig.seek(0) or sig)
-        # Assuming signature is ~2 inch wide
         img_sig = RLImage(sig_obj, width=2.0*inch, height=0.8*inch, kind='proportional')
         img_sig.hAlign = 'CENTER'
         sig_content.append(img_sig)
     else:
-        sig_content.append(Spacer(1, 40)) # Space for manual sign if no file
+        sig_content.append(Spacer(1, 40))
         
     sig_content.append(Paragraph("__________________________", style_td_norm))
     sig_content.append(Paragraph("<b>Authorized Signatory</b>", style_td_norm))
     
-    # Table to push it to the right
     t_sig = Table([[ "", [item for item in sig_content] ]], colWidths=[300, 230])
     t_sig.setStyle(TableStyle([
         ('ALIGN', (1,0), (1,0), 'CENTER'),
