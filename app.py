@@ -34,22 +34,79 @@ with st.sidebar:
     mine_name = st.text_input("Mine / Block No.", value="KODAD")
     allowance = st.text_input("Allowance", value="-5 x 4")
 
-# --- MAIN DATA ENTRY ---
-st.subheader("4. Slab Data Entry")
-st.info("💡 **Tip:** Just enter Length (L) and Height (H) in centimeters. The App calculates the Area automatically.")
+# --- MAGIC PASTE FUNCTIONALITY (New Feature) ---
+with st.expander("🚀 **MAGIC PASTE FROM EXCEL (Click to Open)**", expanded=True):
+    st.markdown("""
+    **Instructions:**
+    1. Open your Excel file.
+    2. Select and Copy columns in this order: **[Slab No] [Gross L] [Gross H] [Net L] [Net H]**.
+    3. Paste them into the box below and click 'Load Data'.
+    *(Note: If you only have Gross dimensions, just paste 3 columns: Slab No, L, H)*
+    """)
+    
+    paste_data = st.text_area("Paste Excel Data Here:", height=150, placeholder="RG-1\t280\t180\t275\t175\nRG-2\t290\t190\t285\t185")
+    
+    if st.button("⚡ Process Pasted Data", type="primary"):
+        if paste_data:
+            try:
+                # Read tab-separated values (standard Excel copy format)
+                # We assume no headers in the paste to keep it simple, or we skip bad rows
+                data_io = io.StringIO(paste_data)
+                
+                # Attempt to parse
+                pasted_df = pd.read_csv(data_io, sep="\t", header=None, on_bad_lines='skip')
+                
+                # Normalize Columns
+                num_cols = pasted_df.shape[1]
+                new_data = []
 
-# Helper to create an empty row structure
-def get_empty_row():
-    return {"Slab No": "", "Gross L (cm)": 0, "Gross H (cm)": 0, "Net L (cm)": 0, "Net H (cm)": 0}
+                for index, row in pasted_df.iterrows():
+                    # clean data to ensure it's valid
+                    try:
+                        slab_no = str(row[0])
+                        # Assuming structure: Col 0=Name, Col 1=GL, Col 2=GH, Col 3=NL, Col 4=NH
+                        if num_cols >= 5:
+                            gl = float(str(row[1]).replace(',', '').strip())
+                            gh = float(str(row[2]).replace(',', '').strip())
+                            nl = float(str(row[3]).replace(',', '').strip())
+                            nh = float(str(row[4]).replace(',', '').strip())
+                        elif num_cols >= 3:
+                            # If only 3 cols, assume Net = Gross
+                            gl = float(str(row[1]).replace(',', '').strip())
+                            gh = float(str(row[2]).replace(',', '').strip())
+                            nl = gl
+                            nh = gh
+                        else:
+                            continue # Skip bad rows
+
+                        new_data.append({
+                            "Slab No": slab_no,
+                            "Gross L (cm)": gl,
+                            "Gross H (cm)": gh,
+                            "Net L (cm)": nl,
+                            "Net H (cm)": nh
+                        })
+                    except:
+                        continue # Skip rows that aren't numbers (like headers)
+
+                if new_data:
+                    st.session_state.slab_data = pd.DataFrame(new_data)
+                    st.success(f"Successfully loaded {len(new_data)} slabs!")
+                else:
+                    st.error("Could not parse data. Ensure you copied columns correctly.")
+            except Exception as e:
+                st.error(f"Error parsing data: {e}")
+
+# --- MAIN DATA ENTRY ---
+st.subheader("4. Slab Data Editor")
 
 # Initialize Session State for Data if not exists
 if "slab_data" not in st.session_state:
-    # Start with 5 empty rows
     st.session_state.slab_data = pd.DataFrame(
-        [{"Slab No": f"RG-{i+1}", "Gross L (cm)": 0, "Gross H (cm)": 0, "Net L (cm)": 0, "Net H (cm)": 0} for i in range(10)]
+        [{"Slab No": f"RG-{i+1}", "Gross L (cm)": 0, "Gross H (cm)": 0, "Net L (cm)": 0, "Net H (cm)": 0} for i in range(5)]
     )
 
-# Data Editor
+# Data Editor (Linked to Session State)
 edited_df = st.data_editor(
     st.session_state.slab_data,
     num_rows="dynamic",
@@ -62,20 +119,24 @@ edited_df = st.data_editor(
     }
 )
 
-# --- CALCULATIONS (Real-time Preview) ---
-# We calculate areas here for the Preview and for the PDF
+# --- CALCULATIONS ---
 # Formula: (L * H) / 10000 = Square Meters
 calc_df = edited_df.copy()
+# Ensure numeric conversion happens before calc
+cols_to_numeric = ["Gross L (cm)", "Gross H (cm)", "Net L (cm)", "Net H (cm)"]
+for col in cols_to_numeric:
+    calc_df[col] = pd.to_numeric(calc_df[col], errors='coerce').fillna(0)
+
 calc_df["Gross Area (m2)"] = (calc_df["Gross L (cm)"] * calc_df["Gross H (cm)"]) / 10000
 calc_df["Net Area (m2)"] = (calc_df["Net L (cm)"] * calc_df["Net H (cm)"]) / 10000
 
-# Filter out empty rows (where area is 0) to avoid clutter
+# Filter out empty rows
 final_data = calc_df[calc_df["Gross Area (m2)"] > 0].copy()
 total_gross_area = final_data["Gross Area (m2)"].sum()
 total_net_area = final_data["Net Area (m2)"].sum()
 total_slabs = len(final_data)
 
-# Show Totals in UI
+# Show Totals
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Slabs", f"{total_slabs}")
 col2.metric("Total Gross Area", f"{total_gross_area:.3f} m2")
@@ -123,10 +184,7 @@ def generate_measurement_pdf(logo, material, inv_no, date_v, thick, cont_no, min
     elements.append(d)
     elements.append(Spacer(1, 15))
 
-    # 2. INFO BLOCK (Grid Layout like Reference)
-    # Row 1: Invoice | Date | Total Slabs
-    # Row 2: Thickness | Mine | Container
-    
+    # 2. INFO BLOCK
     info_data = [
         [
             Paragraph(f"INVOICE NO:<br/><b>{inv_no}</b>", style_info_label),
@@ -151,31 +209,22 @@ def generate_measurement_pdf(logo, material, inv_no, date_v, thick, cont_no, min
     elements.append(Spacer(1, 15))
 
     # 3. MEASUREMENT TABLE
-    # Header Structure (2 Rows)
-    # Row 1: S.No | Slab No | GROSS MEASUREMENT (Span 3) | NET MEASUREMENT (Span 3)
-    # Row 2: Empty | Empty | L | H | Area | L | H | Area
-    
-    # Define Column Widths
-    # Total ~ 540 pts available. 
-    # S.No(30), Slab(60), Gross(L=50, H=50, A=70), Net(L=50, H=50, A=70) -> 30+60+170+170 = 430. Make them wider.
     col_widths = [35, 75, 50, 50, 65, 50, 50, 65]
 
-    # Build Header Rows
     headers = [
         [
             Paragraph("S.NO", style_th_main),
             Paragraph("SLAB NO", style_th_main),
-            Paragraph("GROSS MEASUREMENT", style_th_main), "", "", # Spanned cells placeholders
-            Paragraph("NET MEASUREMENT", style_th_main), "", ""     # Spanned cells placeholders
+            Paragraph("GROSS MEASUREMENT", style_th_main), "", "", 
+            Paragraph("NET MEASUREMENT", style_th_main), "", ""
         ],
         [
-            "", "", # Empty under S.No and Slab
+            "", "", 
             Paragraph("L (cm)", style_th_sub), Paragraph("H (cm)", style_th_sub), Paragraph("AREA (m2)", style_th_sub),
             Paragraph("L (cm)", style_th_sub), Paragraph("H (cm)", style_th_sub), Paragraph("AREA (m2)", style_th_sub),
         ]
     ]
 
-    # Build Data Rows
     data_rows = []
     for index, row in data.iterrows():
         r = [
@@ -192,7 +241,6 @@ def generate_measurement_pdf(logo, material, inv_no, date_v, thick, cont_no, min
         ]
         data_rows.append(r)
 
-    # Total Row
     total_row = [
         "", Paragraph("<b>TOTAL</b>", style_td_bold),
         "", "", Paragraph(f"<b>{t_gross:.3f}</b>", style_td_bold),
@@ -200,31 +248,23 @@ def generate_measurement_pdf(logo, material, inv_no, date_v, thick, cont_no, min
     ]
     data_rows.append(total_row)
 
-    # Construct Table
     full_table_data = headers + data_rows
-    t_meas = Table(full_table_data, colWidths=col_widths, repeatRows=2) # Repeat header on every page
+    t_meas = Table(full_table_data, colWidths=col_widths, repeatRows=2)
 
     t_meas.setStyle(TableStyle([
-        # --- Header Styling ---
-        ('BACKGROUND', (0,0), (-1,0), BLACK), # Top Header Black
-        ('BACKGROUND', (0,1), (-1,1), GREY),  # Sub Header Grey
-        ('TEXTCOLOR', (0,0), (-1,1), GOLD),   # Header Text Gold
+        ('BACKGROUND', (0,0), (-1,0), BLACK), 
+        ('BACKGROUND', (0,1), (-1,1), GREY),  
+        ('TEXTCOLOR', (0,0), (-1,1), GOLD),   
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        
-        # --- Spans ---
-        ('SPAN', (2,0), (4,0)), # Merge Gross Header
-        ('SPAN', (5,0), (7,0)), # Merge Net Header
-        ('SPAN', (0,0), (0,1)), # Merge S.No Vertical
-        ('SPAN', (1,0), (1,1)), # Merge Slab Vertical
-        
-        # --- Data Styling ---
-        ('ROWBACKGROUNDS', (2,0), (-2,-1), [colors.white, LIGHT_BG]), # Zebra Striping
+        ('SPAN', (2,0), (4,0)), 
+        ('SPAN', (5,0), (7,0)), 
+        ('SPAN', (0,0), (0,1)), 
+        ('SPAN', (1,0), (1,1)), 
+        ('ROWBACKGROUNDS', (2,0), (-2,-1), [colors.white, LIGHT_BG]),
         ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
-        
-        # --- Total Row Styling ---
-        ('BACKGROUND', (0,-1), (-1,-1), GOLD), # Total Row Gold Background
+        ('BACKGROUND', (0,-1), (-1,-1), GOLD), 
         ('TEXTCOLOR', (0,-1), (-1,-1), BLACK),
         ('LINEABOVE', (0,-1), (-1,-1), 1.5, BLACK),
     ]))
@@ -235,7 +275,7 @@ def generate_measurement_pdf(logo, material, inv_no, date_v, thick, cont_no, min
     # 4. SIGNATURES
     sig_data = [
         [Paragraph("Inspected By:", style_td), Paragraph("Authorized Signatory:", style_td)],
-        [Spacer(1, 40), Spacer(1, 40)], # Space for signature
+        [Spacer(1, 40), Spacer(1, 40)],
         [Paragraph("_______________________", style_td), Paragraph("_______________________<br/><b>For RUVELLO GLOBAL LLP</b>", style_td)]
     ]
     t_sig = Table(sig_data, colWidths=[270, 270])
