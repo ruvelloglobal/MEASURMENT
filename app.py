@@ -16,13 +16,13 @@ from datetime import datetime
 st.set_page_config(page_title="Ruvello Measurement", page_icon="💎", layout="wide")
 
 st.title("💎 Ruvello Global: Ultimate Measurement Sheet")
-st.markdown("Generate **Zero-Overlap, Gold-Standard** Inspection Reports.")
+st.markdown("Generate **Clean, Minimalist, Ultra-Luxury** Inspection Reports.")
 
 # --- SIDEBAR: SETTINGS ---
 with st.sidebar:
     st.header("1. Assets & Meta")
     
-    # Auto-load logo if exists
+    # Auto-load logo logic
     default_logo = None
     if os.path.exists("logo.png"):
         default_logo = "logo.png"
@@ -116,45 +116,42 @@ else:
     final_df = pd.DataFrame()
 
 
-# --- LUXURY PDF ENGINE (FIXED LAYOUT) ---
+# --- LUXURY PDF ENGINE (WHITE GLOVE EDITION) ---
 def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_slabs, t_gross, t_net):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=30, bottomMargin=30, leftMargin=30, rightMargin=30)
     elements = []
     
-    # --- PALETTE ---
-    GOLD = HexColor('#C5A059')   # Rich Metallic Gold
-    BLACK = HexColor('#000000')  # Jet Black
-    WHITE = HexColor('#FFFFFF')
-    DARK_GREY = HexColor('#202020')
-    LIGHT_GREY = HexColor('#F4F4F4') 
+    # --- PALETTE (Clean White Luxury) ---
+    GOLD = HexColor('#C5A059')   # Elegant Metallic Gold
+    BLACK = HexColor('#101010')  # Sharp Black for text
+    WHITE = HexColor('#FFFFFF')  # Pure White Background
+    DARK_GREY = HexColor('#303030')
+    LIGHT_GREY = HexColor('#FAFAFA') 
     
     # --- STYLES ---
     styles = getSampleStyleSheet()
     
-    # Header Styles
+    # Typography
     style_co = ParagraphStyle('Co', fontName='Times-Bold', fontSize=26, textColor=BLACK, alignment=1, leading=30)
-    style_addr = ParagraphStyle('Ad', fontName='Helvetica', fontSize=8, textColor=HexColor('#404040'), alignment=1, leading=12)
+    style_addr = ParagraphStyle('Ad', fontName='Helvetica', fontSize=8, textColor=DARK_GREY, alignment=1, leading=12)
     style_sub = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=10, textColor=GOLD, alignment=1, letterSpacing=2)
-    
-    # Info Grid Labels
     style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, textColor=HexColor('#555555'), textTransform='uppercase')
     
-    # --- NEW TABLE HEADER STYLES ---
-    # Top Row: Gold Background + Black Text
-    style_th_main = ParagraphStyle('THm', fontName='Times-Bold', fontSize=10, textColor=BLACK, alignment=1)
-    # Second Row: Black Background + White Text
-    style_th_sub = ParagraphStyle('THs', fontName='Helvetica-Bold', fontSize=8, textColor=WHITE, alignment=1)
+    # --- NEW TABLE HEADER STYLES (CLEAN WHITE) ---
+    # Top Row: White BG, Gold Text
+    style_th_main = ParagraphStyle('THm', fontName='Times-Bold', fontSize=10, textColor=GOLD, alignment=1)
+    # Second Row: White BG, Black Text
+    style_th_sub = ParagraphStyle('THs', fontName='Helvetica', fontSize=8, textColor=BLACK, alignment=1)
     
     # Data Cells
     style_td_id = ParagraphStyle('TDid', fontName='Helvetica', fontSize=9, textColor=BLACK, alignment=1)
     style_td_bold = ParagraphStyle('TDbold', fontName='Times-Bold', fontSize=10, textColor=BLACK, alignment=1)
     style_td_norm = ParagraphStyle('TDnorm', fontName='Times-Roman', fontSize=10, textColor=DARK_GREY, alignment=1)
 
-    # 1. RIGID HEADER GRID (Prevents Overlap)
+    # 1. HEADER (Rigid Grid)
     header_rows = []
     
-    # Logo
     if logo:
         if isinstance(logo, str):
             img = RLImage(logo, width=2.2*inch, height=1.6*inch, kind='proportional')
@@ -163,18 +160,14 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
             img = RLImage(logo, width=2.2*inch, height=1.6*inch, kind='proportional')
         header_rows.append([img])
     
-    # Company Name
     header_rows.append([Paragraph("RUVELLO GLOBAL LLP", style_co)])
     
-    # Address
     addr_text = """1305, Uniyaro Ka Rasta, Chandpol Bazar, Jaipur, Rajasthan, INDIA - 302001<br/>
     Email: Rahul@ruvello.com | +91 9636648894"""
     header_rows.append([Paragraph(addr_text, style_addr)])
     
-    # Report Title
     header_rows.append([Paragraph(f"INSPECTION REPORT: {material.upper()}", style_sub)])
     
-    # Layout Table
     t_layout = Table(header_rows, colWidths=[530])
     t_layout.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -186,7 +179,7 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     ]))
     elements.append(t_layout)
     
-    # Gold Divider
+    # Gold Line Divider
     d = Drawing(500, 5)
     d.add(Line(0, 0, 535, 0, strokeColor=GOLD, strokeWidth=1.5))
     elements.append(d)
@@ -208,7 +201,7 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     
     t_info = Table([row1, row2], colWidths=[133, 133, 133, 133])
     t_info.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 0.5, HexColor('#DDDDDD')),
+        ('GRID', (0,0), (-1,-1), 0.5, HexColor('#E0E0E0')),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('PADDING', (0,0), (-1,-1), 12),
         ('BACKGROUND', (0,0), (-1,-1), HexColor('#FAFAFA')),
@@ -216,7 +209,7 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     elements.append(t_info)
     elements.append(Spacer(1, 25))
 
-    # 3. MAIN TABLE
+    # 3. MAIN TABLE (The "White Glove" Design)
     col_widths = [40, 80, 60, 60, 75, 60, 60, 75]
     
     headers = [
@@ -258,13 +251,15 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
     t = Table(headers + rows, colWidths=col_widths, repeatRows=2)
     
     t.setStyle(TableStyle([
-        # --- HEADER 1: GOLD BACKGROUND, BLACK TEXT (GOLD BAR LOOK) ---
-        ('BACKGROUND', (0,0), (-1,0), GOLD),
-        ('TEXTCOLOR', (0,0), (-1,0), BLACK),
+        # --- HEADER 1: WHITE BG, GOLD TEXT ---
+        ('BACKGROUND', (0,0), (-1,0), WHITE),
+        ('TEXTCOLOR', (0,0), (-1,0), GOLD),
+        ('LINEBELOW', (0,0), (-1,0), 0.5, GOLD), # Subtle gold line below main header
         
-        # --- HEADER 2: BLACK BACKGROUND, WHITE TEXT ---
-        ('BACKGROUND', (0,1), (-1,1), BLACK),
-        ('TEXTCOLOR', (0,1), (-1,1), WHITE),
+        # --- HEADER 2: WHITE BG, BLACK TEXT ---
+        ('BACKGROUND', (0,1), (-1,1), WHITE),
+        ('TEXTCOLOR', (0,1), (-1,1), BLACK),
+        ('LINEBELOW', (0,1), (-1,1), 1.5, GOLD), # Thick gold line separating header from data
         
         # Spans
         ('SPAN', (2,0), (4,0)), # Span Gross
@@ -273,18 +268,18 @@ def generate_smart_pdf(logo, material, inv, dt, thk, cont, mine, allow, data, t_
         ('SPAN', (1,0), (1,1)), # Span Slab
         
         # Grid & Alignment
-        ('GRID', (0,0), (-1,-1), 0.5, HexColor('#CCCCCC')),
+        ('GRID', (0,0), (-1,-1), 0.5, HexColor('#DDDDDD')), # Very faint grey grid for elegance
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         
         # Spacing
-        ('TOPPADDING', (0,0), (-1,-1), 7),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 7),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
         
-        # Zebra Rows
-        ('ROWBACKGROUNDS', (2,0), (-2,-1), [WHITE, LIGHT_GREY]),
+        # Zebra Rows (Very subtle)
+        ('ROWBACKGROUNDS', (2,0), (-2,-1), [WHITE, HexColor('#FCFCFC')]),
         
-        # Total Row (Black BG, Gold Text)
+        # Total Row (Black BG, Gold Text for Contrast at Bottom)
         ('BACKGROUND', (0,-1), (-1,-1), BLACK),
         ('TEXTCOLOR', (0,-1), (-1,-1), GOLD),
         ('LINEABOVE', (0,-1), (-1,-1), 2, GOLD),
